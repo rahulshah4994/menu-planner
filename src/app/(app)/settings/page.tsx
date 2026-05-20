@@ -7,6 +7,7 @@ import {
   revokeAllCookTokens,
 } from "./actions";
 import { CookUrlCard } from "./cook-url-card";
+import { ImportCard } from "./import-card";
 
 export default async function SettingsPage() {
   const settings = await getSettings();
@@ -137,6 +138,8 @@ export default async function SettingsPage() {
           </div>
         </form>
       </section>
+
+      <ImportCard />
     </main>
   );
 }
