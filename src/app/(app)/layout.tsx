@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { SignOut } from "@phosphor-icons/react/dist/ssr";
 import { requireFamily } from "@/lib/auth";
+import { BottomNav } from "./bottom-nav";
 
 export default async function AppLayout({
   children,
@@ -11,7 +12,7 @@ export default async function AppLayout({
   return (
     <div className="min-h-screen bg-white">
       <nav className="border-b border-zinc-200">
-        <div className="mx-auto flex max-w-6xl items-center justify-between px-6 py-4">
+        <div className="mx-auto flex max-w-6xl items-center justify-between px-4 py-4 sm:px-6">
           <Link
             href="/"
             className="text-base font-semibold tracking-tight text-black"
@@ -19,6 +20,7 @@ export default async function AppLayout({
             Menu Planner
           </Link>
           <div className="flex items-center gap-6 text-sm">
+            <div className="hidden items-center gap-6 sm:flex">
             <Link
               href="/dishes"
               className="font-medium text-zinc-700 hover:text-black"
@@ -49,6 +51,7 @@ export default async function AppLayout({
             >
               Settings
             </Link>
+            </div>
             <form action="/logout" method="POST">
               <button
                 aria-label="Sign out"
@@ -60,7 +63,10 @@ export default async function AppLayout({
           </div>
         </div>
       </nav>
-      <div className="mx-auto max-w-6xl px-6 py-10">{children}</div>
+      <div className="mx-auto max-w-6xl px-4 py-6 pb-24 sm:px-6 sm:py-10 sm:pb-10">
+        {children}
+      </div>
+      <BottomNav />
     </div>
   );
 }

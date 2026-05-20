@@ -136,16 +136,16 @@ export default async function PlannerPage({
 
   return (
     <main>
-      <header className="mb-8 flex flex-wrap items-end justify-between gap-4">
+      <header className="mb-6 flex flex-wrap items-end justify-between gap-3 sm:mb-8 sm:gap-4">
         <div>
-          <h1 className="text-3xl font-semibold tracking-tight text-black">
+          <h1 className="text-2xl font-semibold tracking-tight text-black sm:text-3xl">
             Planner
           </h1>
           <p className="mt-1 text-sm text-zinc-500">
             {formatWeekRangeLabel(startDate, days)} · {days} days
           </p>
         </div>
-        <div className="flex items-center gap-2">
+        <div className="flex w-full items-center gap-2 sm:w-auto">
           <Link
             href={`/planner?start=${prevStart}`}
             className="btn btn-secondary"
@@ -163,10 +163,14 @@ export default async function PlannerPage({
           >
             <CaretRight size={16} weight="bold" />
           </Link>
-          <form action={randomiseRange.bind(null, startISO, days)}>
+          <form
+            action={randomiseRange.bind(null, startISO, days)}
+            className="ml-auto sm:ml-0"
+          >
             <button type="submit" className="btn btn-primary">
               <Shuffle size={16} weight="bold" />
-              Randomise empty slots
+              <span className="hidden sm:inline">Randomise empty slots</span>
+              <span className="sm:hidden">Randomise</span>
             </button>
           </form>
         </div>
@@ -183,7 +187,7 @@ export default async function PlannerPage({
                 isToday ? "border-black" : "border-zinc-200"
               }`}
             >
-              <div className="flex items-center justify-between border-b border-zinc-200 bg-zinc-50 px-5 py-3">
+              <div className="flex items-center justify-between gap-2 border-b border-zinc-200 bg-zinc-50 px-4 py-3 sm:px-5">
                 <h2 className="flex items-baseline gap-2 text-base font-semibold text-black">
                   {formatDayLabel(d)}
                   {isToday && (
@@ -193,13 +197,17 @@ export default async function PlannerPage({
                   )}
                 </h2>
                 <form action={randomiseDay.bind(null, iso)}>
-                  <button type="submit" className="btn btn-secondary">
+                  <button
+                    type="submit"
+                    className="btn btn-secondary"
+                    aria-label="Randomise day"
+                  >
                     <Shuffle size={14} weight="bold" />
-                    Randomise day
+                    <span className="hidden sm:inline">Randomise day</span>
                   </button>
                 </form>
               </div>
-              <div className="grid gap-3 p-4 md:grid-cols-2">
+              <div className="grid gap-3 p-3 sm:p-4 md:grid-cols-2">
                 {SLOTS.map((slot) => {
                   const row = byKey.get(`${iso}|${slot}`);
                   const plan = {

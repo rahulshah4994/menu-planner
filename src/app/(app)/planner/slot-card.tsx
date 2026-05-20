@@ -1,13 +1,7 @@
 "use client";
-import { useOptimistic, startTransition } from "react";
-import Link from "next/link";
-import {
-  Shuffle,
-  X,
-  Trash,
-  CaretDown,
-  Plus,
-} from "@phosphor-icons/react/dist/ssr";
+import { useOptimistic, startTransition, useState } from "react";
+import { Shuffle, X, Trash, Plus } from "@phosphor-icons/react/dist/ssr";
+import { AddSheet } from "./add-sheet";
 import {
   addMealToSlot,
   removeMealFromSlot,
@@ -105,14 +99,12 @@ export function SlotCard({
     plan,
     reduce
   );
+  const [sheetOpen, setSheetOpen] = useState(false);
 
-  function onMealPick(mealId: string) {
-    if (!mealId) return;
-    const meal = availableMeals.find((m) => m.id === mealId);
-    if (!meal) return;
+  function onMealPick(meal: MealLite) {
     startTransition(async () => {
       dispatch({ type: "ADD_MEAL", meal });
-      await addMealToSlot(date, slot, mealId);
+      await addMealToSlot(date, slot, meal.id);
     });
   }
 
@@ -123,13 +115,10 @@ export function SlotCard({
     });
   }
 
-  function onAddonPick(category: keyof typeof availableAddons, dishId: string) {
-    if (!dishId) return;
-    const addon = availableAddons[category].find((d) => d.id === dishId);
-    if (!addon) return;
+  function onAddonPick(addon: DishLite) {
     startTransition(async () => {
       dispatch({ type: "ADD_ADDON", addon });
-      await addAddonToSlot(date, slot, dishId);
+      await addAddonToSlot(date, slot, addon.id);
     });
   }
 
@@ -138,6 +127,16 @@ export function SlotCard({
       dispatch({ type: "REMOVE_ADDON", dishId });
       await removeAddonFromSlot(date, slot, dishId);
     });
+  }
+
+  function toggleMeal(meal: MealLite) {
+    if (opt.meals.some((m) => m.id === meal.id)) onMealRemove(meal.id);
+    else onMealPick(meal);
+  }
+
+  function toggleAddon(dish: DishLite) {
+    if (opt.addons.some((a) => a.id === dish.id)) onAddonRemove(dish.id);
+    else onAddonPick(dish);
   }
 
   function onToggleEatingOut(value: boolean) {
@@ -170,15 +169,17 @@ export function SlotCard({
   }
 
   function onRandomise() {
-    // randomiseSlot replaces meals — we'll let the server result re-render.
-    // No optimistic state because we don't know which meal will be picked.
     startTransition(async () => {
       await randomiseSlot(date, slot);
     });
   }
 
-  const pickedMealIds = new Set(opt.meals.map((m) => m.id));
-  const remainingMeals = availableMeals.filter((m) => !pickedMealIds.has(m.id));
+  const selectedMealIds = new Set(opt.meals.map((m) => m.id));
+  const selectedAddonIds = new Set(opt.addons.map((a) => a.id));
+  const isEmpty =
+    opt.meals.length === 0 &&
+    opt.addons.length === 0 &&
+    !opt.eating_out;
 
   return (
     <div className="rounded-md border border-zinc-200 p-4">
@@ -186,12 +187,12 @@ export function SlotCard({
         <h3 className="text-sm font-semibold uppercase tracking-wide text-black">
           {slot}
         </h3>
-        <div className="flex items-center gap-1">
+        <div className="flex items-center gap-0.5">
           <button
             type="button"
             onClick={onRandomise}
             aria-label="Randomise this slot"
-            className="rounded-md p-1.5 text-zinc-500 hover:bg-zinc-100 hover:text-black"
+            className="rounded-md p-2 text-zinc-500 hover:bg-zinc-100 hover:text-black"
           >
             <Shuffle size={16} weight="bold" />
           </button>
@@ -201,111 +202,66 @@ export function SlotCard({
               if (confirm("Clear this slot entirely?")) onClear();
             }}
             aria-label="Clear slot"
-            className="rounded-md p-1.5 text-zinc-500 hover:bg-zinc-100 hover:text-black"
+            className="rounded-md p-2 text-zinc-500 hover:bg-zinc-100 hover:text-black"
           >
             <Trash size={16} weight="bold" />
           </button>
         </div>
       </div>
 
-      {/* Meals */}
+      {/* Selected meals + add-ons */}
       <div className="mt-3 flex flex-wrap items-center gap-1.5">
         {opt.meals.map((m) => (
           <span
             key={m.id}
-            className="inline-flex items-center gap-1 rounded-md bg-black px-2.5 py-1 text-xs text-white"
+            className="inline-flex items-center gap-1 rounded-md bg-black py-1 pl-2.5 pr-1 text-xs text-white"
           >
             {m.name_en}
             <button
               type="button"
               onClick={() => onMealRemove(m.id)}
               aria-label={`Remove ${m.name_en}`}
-              className="text-zinc-300 hover:text-white"
+              className="rounded p-0.5 text-zinc-300 hover:text-white"
             >
               <X size={12} weight="bold" />
             </button>
           </span>
         ))}
-        {opt.meals.length === 0 && !opt.eating_out && (
-          <span className="text-xs text-zinc-400">No meal picked yet</span>
+        {opt.addons.map((a) => (
+          <span
+            key={a.id}
+            className="inline-flex items-center gap-1 rounded-md border border-zinc-300 bg-white py-1 pl-2 pr-1 text-xs"
+          >
+            <span className="text-[10px] uppercase tracking-wide text-zinc-500">
+              {a.category[0]}
+            </span>
+            {a.name_en}
+            <button
+              type="button"
+              onClick={() => onAddonRemove(a.id)}
+              aria-label={`Remove ${a.name_en}`}
+              className="rounded p-0.5 text-zinc-500 hover:text-black"
+            >
+              <X size={11} weight="bold" />
+            </button>
+          </span>
+        ))}
+        {isEmpty && (
+          <span className="text-xs text-zinc-400">Nothing picked yet</span>
         )}
         {opt.eating_out && <span className="tag-soft">🍽 Eating out</span>}
       </div>
 
-      {/* Add-meal button */}
+      {/* Add button */}
       {!opt.eating_out && (
-        <div className="mt-2">
-          {availableMeals.length === 0 ? (
-            <p className="text-xs text-zinc-400">
-              No {slot.toLowerCase()} meals in your DB.{" "}
-              <Link href="/meals/new" className="text-black underline">
-                Create one →
-              </Link>
-            </p>
-          ) : remainingMeals.length === 0 ? (
-            <p className="text-xs text-zinc-400">All available meals picked.</p>
-          ) : (
-            <PickerSelect
-              label={opt.meals.length === 0 ? "Add meal" : "Add another meal"}
-              options={remainingMeals.map((m) => ({
-                value: m.id,
-                label: m.name_en,
-              }))}
-              onPick={onMealPick}
-            />
-          )}
-        </div>
-      )}
-
-      {/* Add-ons */}
-      {!opt.eating_out && (
-        <div className="mt-4 border-t border-zinc-100 pt-3">
-          {opt.addons.length > 0 && (
-            <div className="flex flex-wrap items-center gap-1.5">
-              {opt.addons.map((a) => (
-                <span
-                  key={a.id}
-                  className="inline-flex items-center gap-1 rounded-md border border-zinc-300 bg-white px-2 py-0.5 text-xs"
-                >
-                  <span className="text-[10px] uppercase tracking-wide text-zinc-500">
-                    {a.category[0]}
-                  </span>
-                  {a.name_en}
-                  <button
-                    type="button"
-                    onClick={() => onAddonRemove(a.id)}
-                    aria-label={`Remove ${a.name_en}`}
-                    className="text-zinc-500 hover:text-black"
-                  >
-                    <X size={11} weight="bold" />
-                  </button>
-                </span>
-              ))}
-            </div>
-          )}
-
-          <div className="mt-2 flex flex-wrap gap-1.5">
-            {(["Beverage", "Side", "Salad", "Dessert"] as const).map((cat) => {
-              const pool = availableAddons[cat] ?? [];
-              const pickedIds = new Set(
-                opt.addons.filter((a) => a.category === cat).map((a) => a.id)
-              );
-              const remaining = pool.filter((p) => !pickedIds.has(p.id));
-              return (
-                <PickerSelect
-                  key={cat}
-                  label={`+ ${cat}`}
-                  options={remaining.map((d) => ({
-                    value: d.id,
-                    label: d.name_en,
-                  }))}
-                  emptyLabel={pool.length === 0 ? "no dishes" : "all picked"}
-                  onPick={(v) => onAddonPick(cat, v)}
-                />
-              );
-            })}
-          </div>
-        </div>
+        <button
+          type="button"
+          onClick={() => setSheetOpen(true)}
+          className="mt-3 flex min-h-[40px] w-full items-center justify-center gap-1.5 rounded-md border border-dashed border-zinc-300 py-2 text-xs font-medium text-zinc-600 hover:border-black hover:bg-zinc-50 hover:text-black"
+        >
+          <Plus size={14} weight="bold" />
+          Add meal or dish
+        </button>
       )}
 
       {/* Eating out + guests */}
@@ -325,7 +281,7 @@ export function SlotCard({
             type="button"
             disabled={opt.guests <= 0}
             onClick={() => onGuestsChange(-1)}
-            className="h-6 w-6 rounded-md border border-zinc-300 hover:bg-zinc-100 disabled:opacity-40"
+            className="h-7 w-7 rounded-md border border-zinc-300 hover:bg-zinc-100 disabled:opacity-40"
           >
             −
           </button>
@@ -335,7 +291,7 @@ export function SlotCard({
           <button
             type="button"
             onClick={() => onGuestsChange(1)}
-            className="h-6 w-6 rounded-md border border-zinc-300 hover:bg-zinc-100"
+            className="h-7 w-7 rounded-md border border-zinc-300 hover:bg-zinc-100"
           >
             +
           </button>
@@ -363,56 +319,18 @@ export function SlotCard({
           </button>
         </form>
       </details>
-    </div>
-  );
-}
 
-/** Button-styled select that fires onPick when an option is chosen. */
-function PickerSelect({
-  label,
-  options,
-  onPick,
-  emptyLabel,
-}: {
-  label: string;
-  options: { value: string; label: string }[];
-  onPick: (v: string) => void;
-  emptyLabel?: string;
-}) {
-  const isEmpty = options.length === 0;
-  return (
-    <div className="relative inline-flex">
-      <select
-        disabled={isEmpty}
-        value=""
-        onChange={(e) => {
-          onPick(e.target.value);
-          e.target.value = "";
-        }}
-        className="
-          cursor-pointer appearance-none rounded-md border border-zinc-300
-          bg-white py-1.5 pl-3 pr-8 text-xs font-medium text-black
-          hover:border-black focus:border-black focus:outline-none
-          disabled:cursor-not-allowed disabled:opacity-50
-        "
-        aria-label={label}
-      >
-        <option value="">
-          {isEmpty ? `${label} (${emptyLabel ?? "none"})` : label}
-        </option>
-        {options.map((o) => (
-          <option key={o.value} value={o.value}>
-            {o.label}
-          </option>
-        ))}
-      </select>
-      <CaretDown
-        size={12}
-        weight="bold"
-        className="pointer-events-none absolute right-2.5 top-1/2 -translate-y-1/2 text-zinc-500"
+      <AddSheet
+        open={sheetOpen}
+        onClose={() => setSheetOpen(false)}
+        slot={slot}
+        meals={availableMeals}
+        addonsByCategory={availableAddons}
+        selectedMealIds={selectedMealIds}
+        selectedAddonIds={selectedAddonIds}
+        onToggleMeal={toggleMeal}
+        onToggleAddon={toggleAddon}
       />
     </div>
   );
 }
-
-export { Plus };
