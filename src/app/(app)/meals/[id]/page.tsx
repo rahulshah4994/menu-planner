@@ -2,6 +2,7 @@ import { MealForm } from "../meal-form";
 import { updateMeal } from "../actions";
 import { createClient } from "@/lib/supabase/server";
 import { notFound } from "next/navigation";
+import { DEFAULT_CUISINES, mergeOptions, collectTags } from "@/lib/options";
 
 export default async function EditMealPage({
   params,
@@ -14,6 +15,7 @@ export default async function EditMealPage({
     { data: meal },
     { data: dishes },
     { data: mealDishes },
+    { data: rows },
   ] = await Promise.all([
     supabase.from("meals").select("*").eq("id", id).single(),
     supabase
@@ -26,9 +28,11 @@ export default async function EditMealPage({
       .select("dish_id, position")
       .eq("meal_id", id)
       .order("position"),
+    supabase.from("meals").select("cuisine, tags"),
   ]);
   if (!meal) notFound();
   const initialDishIds = mealDishes?.map((md) => md.dish_id) ?? [];
+  const r = rows ?? [];
   const update = updateMeal.bind(null, id);
 
   return (
@@ -38,6 +42,11 @@ export default async function EditMealPage({
         initial={meal}
         initialDishIds={initialDishIds}
         allDishes={dishes ?? []}
+        cuisineOptions={mergeOptions(
+          DEFAULT_CUISINES,
+          r.map((x) => x.cuisine)
+        )}
+        tagOptions={collectTags(r)}
         action={update}
       />
     </main>

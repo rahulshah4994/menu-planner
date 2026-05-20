@@ -11,7 +11,6 @@ const settingsSchema = z.object({
   household_size: z.coerce.number().int().min(1).max(50),
   no_repeat_days_breakfast: z.coerce.number().int().min(0).max(30),
   no_repeat_days_lunch: z.coerce.number().int().min(0).max(30),
-  no_repeat_days_evening_snack: z.coerce.number().int().min(0).max(30),
   no_repeat_days_dinner: z.coerce.number().int().min(0).max(30),
 });
 
@@ -23,7 +22,6 @@ export async function updateSettings(fd: FormData) {
     household_size: fd.get("household_size"),
     no_repeat_days_breakfast: fd.get("no_repeat_days_breakfast"),
     no_repeat_days_lunch: fd.get("no_repeat_days_lunch"),
-    no_repeat_days_evening_snack: fd.get("no_repeat_days_evening_snack"),
     no_repeat_days_dinner: fd.get("no_repeat_days_dinner"),
   });
   // Persist as time-with-seconds for Postgres

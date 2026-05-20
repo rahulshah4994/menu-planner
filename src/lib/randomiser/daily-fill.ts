@@ -3,8 +3,8 @@ import { pickMeal } from "./pick-meal";
 import type { AppSettings } from "@/lib/settings";
 import { addDays, formatISODate } from "@/lib/dates";
 
-type Slot = "Breakfast" | "Lunch" | "Evening Snack" | "Dinner";
-const SLOTS: Slot[] = ["Breakfast", "Lunch", "Evening Snack", "Dinner"];
+type Slot = "Breakfast" | "Lunch" | "Dinner";
+const SLOTS: Slot[] = ["Breakfast", "Lunch", "Dinner"];
 
 /**
  * For each date in [startDate, startDate + days), ensure a meal_plans row

@@ -5,16 +5,8 @@ import { createClient } from "@/lib/supabase/server";
 
 const body = z.object({
   name_en: z.string().min(1).max(120),
-  category: z.enum([
-    "Component",
-    "Bread",
-    "Grain",
-    "Snack",
-    "Beverage",
-    "Side",
-    "Salad",
-    "Dessert",
-  ]),
+  // Category is free text since migration 0005 (creatable on the dish form).
+  category: z.string().min(1).max(60),
 });
 
 export async function POST(req: Request) {

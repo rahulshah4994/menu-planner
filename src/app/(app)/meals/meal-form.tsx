@@ -3,13 +3,11 @@ import { useState, useTransition } from "react";
 import { Plus, Sparkle } from "@phosphor-icons/react/dist/ssr";
 import type { Meal, MealType, Season, Dish } from "@/lib/db/types";
 import { DishPicker } from "@/components/dish-picker";
+import { CreatableSelect } from "@/components/creatable-select";
+import { TagInput } from "@/components/tag-input";
+import { splitTags } from "@/lib/options";
 
-const MEAL_TYPES: MealType[] = [
-  "Breakfast",
-  "Lunch",
-  "Evening Snack",
-  "Dinner",
-];
+const MEAL_TYPES: MealType[] = ["Breakfast", "Lunch", "Dinner"];
 const SEASONS: Season[] = ["All", "Summer", "Winter"];
 
 type DishLite = Pick<Dish, "id" | "name_en" | "name_hi" | "category">;
@@ -39,11 +37,15 @@ export function MealForm({
   initial,
   initialDishIds = [],
   allDishes,
+  cuisineOptions,
+  tagOptions,
   action,
 }: {
   initial?: Partial<Meal>;
   initialDishIds?: string[];
   allDishes: DishLite[];
+  cuisineOptions: string[];
+  tagOptions: string[];
   action: (formData: FormData) => Promise<void>;
 }) {
   const [name_en, setNameEn] = useState(initial?.name_en ?? "");
@@ -53,7 +55,7 @@ export function MealForm({
   );
   const [weight, setWeight] = useState(initial?.weight ?? 5);
   const [cuisine, setCuisine] = useState(initial?.cuisine ?? "");
-  const [tags, setTags] = useState(initial?.tags ?? "");
+  const [tags, setTags] = useState<string[]>(splitTags(initial?.tags ?? ""));
   const [effort, setEffort] = useState<number | "">(initial?.effort ?? "");
   const [season, setSeason] = useState<Season>(
     (initial?.season ?? "All") as Season
@@ -112,6 +114,7 @@ export function MealForm({
           value={name_en}
           onChange={(e) => setNameEn(e.target.value)}
           required
+          disabled={filling}
           className="input"
         />
       </Field>
@@ -123,6 +126,7 @@ export function MealForm({
             value={name_hi}
             onChange={(e) => setNameHi(e.target.value)}
             required
+            disabled={filling}
             className="input"
           />
         </Field>
@@ -169,6 +173,7 @@ export function MealForm({
             name="meal_type"
             value={meal_type}
             onChange={(e) => setMealType(e.target.value as MealType)}
+            disabled={filling}
             className="input"
           >
             {MEAL_TYPES.map((t) => (
@@ -186,6 +191,7 @@ export function MealForm({
             max={10}
             value={weight}
             onChange={(e) => setWeight(Number(e.target.value))}
+            disabled={filling}
             className="input"
           />
         </Field>
@@ -202,19 +208,22 @@ export function MealForm({
 
       <div className="grid grid-cols-2 gap-3">
         <Field label="Cuisine">
-          <input
+          <CreatableSelect
             name="cuisine"
             value={cuisine ?? ""}
-            onChange={(e) => setCuisine(e.target.value)}
-            className="input"
+            onChange={setCuisine}
+            options={cuisineOptions}
+            disabled={filling}
+            placeholder="Pick or type…"
           />
         </Field>
         <Field label="Tags">
-          <input
+          <TagInput
             name="tags"
             value={tags}
-            onChange={(e) => setTags(e.target.value)}
-            className="input"
+            onChange={setTags}
+            suggestions={tagOptions}
+            disabled={filling}
           />
         </Field>
       </div>
@@ -230,6 +239,7 @@ export function MealForm({
             onChange={(e) =>
               setEffort(e.target.value ? Number(e.target.value) : "")
             }
+            disabled={filling}
             className="input"
           />
         </Field>
@@ -238,6 +248,7 @@ export function MealForm({
             name="season"
             value={season}
             onChange={(e) => setSeason(e.target.value as Season)}
+            disabled={filling}
             className="input"
           >
             {SEASONS.map((s) => (
@@ -252,6 +263,7 @@ export function MealForm({
             name="guest_worthy"
             value={guest_worthy ? "yes" : "no"}
             onChange={(e) => setGuestWorthy(e.target.value === "yes")}
+            disabled={filling}
             className="input"
           >
             <option value="no">No</option>
@@ -266,12 +278,13 @@ export function MealForm({
           name="active"
           checked={active}
           onChange={(e) => setActive(e.target.checked)}
+          disabled={filling}
         />
         Active
       </label>
 
       <div className="pt-3">
-        <button type="submit" className="btn btn-primary">
+        <button type="submit" disabled={filling} className="btn btn-primary">
           Save meal
         </button>
       </div>

@@ -1,15 +1,23 @@
 "use client";
 import { useEffect, useState } from "react";
+import Link from "next/link";
+import { CaretLeft, CaretRight } from "@phosphor-icons/react/dist/ssr";
+import {
+  addDays,
+  formatISODate,
+  formatWeekRangeLabel,
+  parseISODate,
+} from "@/lib/dates";
+import { mealTypeColor } from "@/lib/meal-colors";
 
-type Slot = "Breakfast" | "Lunch" | "Evening Snack" | "Dinner";
+type Slot = "Breakfast" | "Lunch" | "Dinner";
 type Lang = "hi" | "en" | "both";
 
-const SLOTS: Slot[] = ["Breakfast", "Lunch", "Evening Snack", "Dinner"];
+const SLOTS: Slot[] = ["Breakfast", "Lunch", "Dinner"];
 
 const SLOT_LABEL: Record<Slot, { hi: string; en: string }> = {
   Breakfast: { hi: "नाश्ता", en: "Breakfast" },
   Lunch: { hi: "दोपहर का खाना", en: "Lunch" },
-  "Evening Snack": { hi: "शाम का नाश्ता", en: "Evening Snack" },
   Dinner: { hi: "रात का खाना", en: "Dinner" },
 };
 
@@ -67,21 +75,21 @@ export interface ViewerPlan {
   }[];
 }
 
-function dayLabel(iso: string, idx: number, lang: Lang) {
+function dayLabel(iso: string, todayISO: string, tomorrowISO: string) {
   const d = new Date(`${iso}T00:00:00`);
   const hiName = DAY_HINDI[d.getDay()];
   const dd = d.getDate();
   const mm = d.toLocaleDateString("en-US", { month: "short" });
   const enWeekday = d.toLocaleDateString("en-US", { weekday: "long" });
 
-  const hi =
-    idx === 0 ? "आज" : idx === 1 ? "कल" : `${hiName} · ${dd} ${mm}`;
-  const en =
-    idx === 0
-      ? "Today"
-      : idx === 1
-      ? "Tomorrow"
-      : `${enWeekday} · ${dd} ${mm}`;
+  const isToday = iso === todayISO;
+  const isTomorrow = iso === tomorrowISO;
+  const hi = isToday ? "आज" : isTomorrow ? "कल" : `${hiName} · ${dd} ${mm}`;
+  const en = isToday
+    ? "Today"
+    : isTomorrow
+    ? "Tomorrow"
+    : `${enWeekday} · ${dd} ${mm}`;
   return { hi, en, sub: `${enWeekday}, ${dd} ${mm}` };
 }
 
@@ -89,10 +97,18 @@ export function ViewerMenu({
   dates,
   plans,
   householdSize,
+  todayISO,
+  token,
+  prevStart,
+  nextStart,
 }: {
   dates: string[];
   plans: ViewerPlan[];
   householdSize: number;
+  todayISO: string;
+  token: string;
+  prevStart: string;
+  nextStart: string;
 }) {
   const [lang, setLang] = useState<Lang>("both");
 
@@ -100,6 +116,7 @@ export function ViewerMenu({
   useEffect(() => {
     const saved = localStorage.getItem("viewer-lang");
     if (saved === "hi" || saved === "en" || saved === "both") {
+      // eslint-disable-next-line react-hooks/set-state-in-effect -- one-time hydration-safe read of the saved choice
       setLang(saved);
     }
   }, []);
@@ -110,20 +127,56 @@ export function ViewerMenu({
   const byKey = new Map<string, ViewerPlan>();
   for (const p of plans) byKey.set(`${p.date}|${p.slot}`, p);
 
+  const tomorrowISO = formatISODate(addDays(parseISODate(todayISO), 1));
+  const isCurrent = dates[0] === todayISO;
+  const rangeLabel = formatWeekRangeLabel(parseISODate(dates[0]), dates.length);
+
   const heading =
+    lang === "hi" ? "मेनू" : lang === "en" ? "Menu" : "मेनू · Menu";
+  const backToToday =
     lang === "hi"
-      ? "आज का मेनू"
+      ? "आज पर लौटें"
       : lang === "en"
-      ? "Today's Menu"
-      : "आज का मेनू · Today's Menu";
+      ? "Back to today"
+      : "आज पर लौटें · Back to today";
 
   return (
-    <main className="mx-auto min-h-screen max-w-2xl bg-white px-5 py-6">
-      <header className="mb-5">
+    <main className="mx-auto min-h-screen max-w-6xl bg-white px-5 py-6">
+      <header className="mb-6">
         <h1 className="text-2xl font-semibold tracking-tight text-black">
           {heading}
         </h1>
-        <p className="mt-1 text-sm text-zinc-500">{dates.length} days</p>
+
+        {/* Previous / range / next */}
+        <div className="mt-3 flex max-w-sm items-center gap-2">
+          <Link
+            href={`/viewer/${token}?start=${prevStart}`}
+            aria-label="Previous days"
+            className="rounded-md border border-zinc-300 p-2 text-zinc-600 hover:border-black hover:text-black"
+          >
+            <CaretLeft size={16} weight="bold" />
+          </Link>
+          <span className="flex-1 text-center text-sm font-medium text-zinc-700">
+            {rangeLabel}
+          </span>
+          <Link
+            href={`/viewer/${token}?start=${nextStart}`}
+            aria-label="Next days"
+            className="rounded-md border border-zinc-300 p-2 text-zinc-600 hover:border-black hover:text-black"
+          >
+            <CaretRight size={16} weight="bold" />
+          </Link>
+        </div>
+        {!isCurrent && (
+          <div className="mt-2 max-w-sm text-center">
+            <Link
+              href={`/viewer/${token}`}
+              className="text-xs font-medium text-black underline"
+            >
+              {backToToday}
+            </Link>
+          </div>
+        )}
 
         {/* Language toggle */}
         <div className="mt-4 inline-flex rounded-lg border border-zinc-300 p-0.5">
@@ -144,21 +197,23 @@ export function ViewerMenu({
         </div>
       </header>
 
-      <div className="space-y-8">
-        {dates.map((iso, idx) => {
-          const dl = dayLabel(iso, idx, lang);
+      {/* Day-wise calendar columns — swipe sideways for more days. */}
+      <div className="flex snap-x snap-mandatory gap-4 overflow-x-auto pb-4">
+        {dates.map((iso) => {
+          const dl = dayLabel(iso, todayISO, tomorrowISO);
           return (
-            <section key={iso}>
-              <h2 className="text-base font-semibold text-black">
+            <section
+              key={iso}
+              className="flex w-72 shrink-0 snap-start flex-col"
+            >
+              <h2 className="text-2xl font-bold tracking-tight text-black">
                 {lang === "en" ? dl.en : dl.hi}
-                {lang !== "en" && (
-                  <span className="ml-2 text-xs font-normal text-zinc-400">
-                    {dl.sub}
-                  </span>
-                )}
               </h2>
+              {lang !== "en" && (
+                <p className="mt-0.5 text-sm text-zinc-400">{dl.sub}</p>
+              )}
 
-              <div className="mt-3 space-y-3">
+              <div className="mt-3 flex flex-col gap-3">
                 {SLOTS.map((slot) => {
                   const p = byKey.get(`${iso}|${slot}`);
                   return (
@@ -201,11 +256,12 @@ function SlotBlock({
   );
   const addons = plan?.meal_plan_addons ?? [];
   const empty = !plan || (meals.length === 0 && !plan.eating_out);
+  const c = mealTypeColor(slot);
 
   return (
-    <div className="border border-zinc-200 p-4">
+    <div className={`border p-4 ${c.bg} ${c.border}`}>
       <div className="flex items-baseline justify-between">
-        <h3 className="text-sm font-semibold text-black">
+        <h3 className={`text-sm font-semibold ${c.heading}`}>
           {lang === "en" ? label.en : label.hi}
         </h3>
         {lang === "both" && (

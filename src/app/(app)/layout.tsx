@@ -40,12 +40,6 @@ export default async function AppLayout({
               Planner
             </Link>
             <Link
-              href="/grocery"
-              className="font-medium text-zinc-700 hover:text-black"
-            >
-              Grocery
-            </Link>
-            <Link
               href="/settings"
               className="font-medium text-zinc-700 hover:text-black"
             >

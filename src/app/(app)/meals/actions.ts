@@ -7,7 +7,7 @@ import { z } from "zod";
 const mealSchema = z.object({
   name_en: z.string().trim().min(1),
   name_hi: z.string().trim().min(1),
-  meal_type: z.enum(["Breakfast", "Lunch", "Evening Snack", "Dinner"]),
+  meal_type: z.enum(["Breakfast", "Lunch", "Dinner"]),
   weight: z.coerce.number().int().min(1).max(10),
   cuisine: z
     .string()

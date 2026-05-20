@@ -97,7 +97,7 @@ export default async function SettingsPage() {
           <h3 className="mt-2 text-xs font-medium uppercase tracking-wide text-zinc-500">
             No-repeat window per slot
           </h3>
-          <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
+          <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">
             <Field label="Breakfast">
               <input
                 name="no_repeat_days_breakfast"
@@ -115,16 +115,6 @@ export default async function SettingsPage() {
                 min={0}
                 max={30}
                 defaultValue={settings.no_repeat_days_lunch}
-                className="input"
-              />
-            </Field>
-            <Field label="Evening Snack">
-              <input
-                name="no_repeat_days_evening_snack"
-                type="number"
-                min={0}
-                max={30}
-                defaultValue={settings.no_repeat_days_evening_snack}
                 className="input"
               />
             </Field>

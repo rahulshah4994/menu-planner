@@ -2,16 +2,9 @@
 // Once you have the Supabase CLI installed, you can regenerate via:
 //   npx supabase gen types typescript --project-id YOUR_REF > src/lib/db/types.ts
 
-export type DishCategory =
-  | "Component"
-  | "Bread"
-  | "Grain"
-  | "Snack"
-  | "Beverage"
-  | "Side"
-  | "Salad"
-  | "Dessert";
-export type MealType = "Breakfast" | "Lunch" | "Evening Snack" | "Dinner";
+// Category is free text since migration 0005 (creatable on the dish form).
+export type DishCategory = string;
+export type MealType = "Breakfast" | "Lunch" | "Dinner";
 export type Season = "Summer" | "Winter" | "All";
 
 export interface Dish {
@@ -24,6 +17,7 @@ export interface Dish {
   recipe_url: string | null;
   cuisine: string | null;
   tags: string;
+  is_one_pot: boolean;
   active: boolean;
   created_at: string;
   updated_at: string;
@@ -40,6 +34,7 @@ export interface Meal {
   effort: number | null;
   season: Season;
   guest_worthy: boolean;
+  source_dish_id: string | null;
   active: boolean;
   created_at: string;
   updated_at: string;

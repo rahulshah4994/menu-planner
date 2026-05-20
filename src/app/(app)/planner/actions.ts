@@ -4,8 +4,8 @@ import { revalidatePath } from "next/cache";
 import { pickMeal } from "@/lib/randomiser/pick-meal";
 import { getSettings } from "@/lib/settings";
 
-type Slot = "Breakfast" | "Lunch" | "Evening Snack" | "Dinner";
-const SLOTS: Slot[] = ["Breakfast", "Lunch", "Evening Snack", "Dinner"];
+type Slot = "Breakfast" | "Lunch" | "Dinner";
+const SLOTS: Slot[] = ["Breakfast", "Lunch", "Dinner"];
 
 async function ensurePlanRow(date: string, slot: Slot) {
   const supabase = await createClient();

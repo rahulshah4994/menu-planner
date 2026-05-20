@@ -5,7 +5,7 @@ import { createClient } from "@/lib/supabase/server";
 
 const body = z.object({
   name_en: z.string().min(1).max(120),
-  meal_type: z.enum(["Breakfast", "Lunch", "Evening Snack", "Dinner"]),
+  meal_type: z.enum(["Breakfast", "Lunch", "Dinner"]),
 });
 
 export async function POST(req: Request) {

@@ -5,7 +5,6 @@ import {
   CalendarBlank,
   BowlFood,
   ForkKnife,
-  ShoppingCart,
   Gear,
 } from "@phosphor-icons/react/dist/ssr";
 
@@ -13,7 +12,6 @@ const ITEMS = [
   { href: "/planner", label: "Planner", Icon: CalendarBlank },
   { href: "/meals", label: "Meals", Icon: BowlFood },
   { href: "/dishes", label: "Dishes", Icon: ForkKnife },
-  { href: "/grocery", label: "Grocery", Icon: ShoppingCart },
   { href: "/settings", label: "Settings", Icon: Gear },
 ];
 

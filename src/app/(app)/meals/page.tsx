@@ -2,6 +2,7 @@ import Link from "next/link";
 import { Plus } from "@phosphor-icons/react/dist/ssr";
 import { createClient } from "@/lib/supabase/server";
 import { RowActions } from "@/components/row-actions";
+import { mealTypeColor } from "@/lib/meal-colors";
 import { deleteMeal } from "./actions";
 
 export default async function MealsPage() {
@@ -54,7 +55,13 @@ export default async function MealsPage() {
                   </td>
                   <td className="td-base text-zinc-700">{m.name_hi}</td>
                   <td className="td-base">
-                    <span className="tag-soft">{m.meal_type}</span>
+                    <span
+                      className={`inline-block rounded px-2 py-0.5 text-[0.6875rem] font-medium ${
+                        mealTypeColor(m.meal_type).badge
+                      }`}
+                    >
+                      {m.meal_type}
+                    </span>
                   </td>
                   <td className="td-base max-w-xs truncate text-zinc-600">
                     {dishes?.map((md) => md.dish.name_en).join(", ")}

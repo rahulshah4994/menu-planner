@@ -2,7 +2,7 @@ import { SupabaseClient } from "@supabase/supabase-js";
 import { addDays, formatISODate, parseISODate } from "@/lib/dates";
 import { noRepeatDaysForSlot, type AppSettings } from "@/lib/settings";
 
-type Slot = "Breakfast" | "Lunch" | "Evening Snack" | "Dinner";
+type Slot = "Breakfast" | "Lunch" | "Dinner";
 
 interface PickOpts {
   excludeMealIds?: Set<string>;
@@ -23,10 +23,13 @@ export async function pickMeal(
   settings: AppSettings,
   opts: PickOpts = {}
 ): Promise<string | null> {
+  // Lunch and Dinner share a pool — either type is eligible for both slots.
+  const eligibleTypes: Slot[] =
+    slot === "Lunch" || slot === "Dinner" ? ["Lunch", "Dinner"] : [slot];
   const { data: meals } = await supabase
     .from("meals")
     .select("id, weight")
-    .eq("meal_type", slot)
+    .in("meal_type", eligibleTypes)
     .eq("active", true);
 
   if (!meals || meals.length === 0) return null;

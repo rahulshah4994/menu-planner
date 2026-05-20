@@ -4,19 +4,22 @@ import { RandomiseButton } from "./submit-button";
 import { createClient } from "@/lib/supabase/server";
 import {
   addDays,
-  formatDayLabel,
   formatISODate,
   formatWeekRangeLabel,
   parseISODate,
   rangeDays,
 } from "@/lib/dates";
 import { getSettings } from "@/lib/settings";
-import { SlotCard } from "./slot-card";
-import { randomiseDay, randomiseRange } from "./actions";
-
-type Slot = "Breakfast" | "Lunch" | "Evening Snack" | "Dinner";
-const SLOTS: Slot[] = ["Breakfast", "Lunch", "Evening Snack", "Dinner"];
-const ADDON_CATEGORIES = ["Beverage", "Side", "Salad", "Dessert"] as const;
+import { randomiseRange } from "./actions";
+import { PlannerBoard } from "./planner-board";
+import {
+  SLOTS,
+  type AddonCategory,
+  type AddonLite,
+  type MealLite,
+  type PlanState,
+  type Slot,
+} from "./types";
 
 export default async function PlannerPage({
   searchParams,
@@ -32,15 +35,11 @@ export default async function PlannerPage({
   const todayISO = formatISODate(todayDate);
   const startDate = start ? parseISODate(start) : todayDate;
   const startISO = formatISODate(startDate);
-  const endDate = addDays(startDate, days);
-  const endISO = formatISODate(endDate);
-
+  const endISO = formatISODate(addDays(startDate, days));
   const prevStart = formatISODate(addDays(startDate, -days));
   const nextStart = formatISODate(addDays(startDate, days));
 
   const supabase = await createClient();
-
-  // Run the 3 reads in parallel
   const [plansResult, mealsResult, addonsResult] = await Promise.all([
     supabase
       .from("meal_plans")
@@ -48,7 +47,7 @@ export default async function PlannerPage({
         `id, date, slot, eating_out, guests, today_note,
          meal_plan_meals (
            meal_id, position,
-           meal:meals (id, name_en, name_hi, meal_type)
+           meal:meals (id, name_en, name_hi)
          ),
          meal_plan_addons (
            dish_id,
@@ -69,11 +68,7 @@ export default async function PlannerPage({
       .eq("active", true)
       .order("name_en"),
   ]);
-  const plansData = plansResult.data;
-  const allMealsData = mealsResult.data;
-  const addonsData = addonsResult.data;
 
-  // Lookup table keyed by `${date}|${slot}`
   type PlanRow = {
     id: string;
     date: string;
@@ -92,48 +87,75 @@ export default async function PlannerPage({
         id: string;
         name_en: string;
         name_hi: string;
-        category: "Beverage" | "Side" | "Salad" | "Dessert";
+        category: AddonCategory;
       };
     }[];
   };
+
   const byKey = new Map<string, PlanRow>();
-  for (const p of (plansData ?? []) as unknown as PlanRow[]) {
+  for (const p of (plansResult.data ?? []) as unknown as PlanRow[]) {
     byKey.set(`${p.date}|${p.slot}`, p);
   }
 
-  const mealsByType: Record<Slot, { id: string; name_en: string; name_hi: string }[]> = {
+  const dates = rangeDays(startDate, days).map((d) => formatISODate(d));
+
+  // One PlanState per date|slot — empty default where no row exists.
+  const slotPlans: Record<string, PlanState> = {};
+  for (const iso of dates) {
+    for (const slot of SLOTS) {
+      const row = byKey.get(`${iso}|${slot}`);
+      slotPlans[`${iso}|${slot}`] = {
+        meals: (row?.meal_plan_meals ?? [])
+          .slice()
+          .sort((a, b) => a.position - b.position)
+          .map((mm) => ({
+            id: mm.meal.id,
+            name_en: mm.meal.name_en,
+            name_hi: mm.meal.name_hi,
+          })),
+        addons: (row?.meal_plan_addons ?? []).map((ma) => ({
+          id: ma.dish.id,
+          name_en: ma.dish.name_en,
+          name_hi: ma.dish.name_hi,
+          category: ma.dish.category,
+        })),
+        eating_out: row?.eating_out ?? false,
+        guests: row?.guests ?? 0,
+        today_note: row?.today_note ?? null,
+      };
+    }
+  }
+
+  // Meals available per slot — Lunch & Dinner share a pool.
+  const mealsByType: Record<Slot, MealLite[]> = {
     Breakfast: [],
     Lunch: [],
-    "Evening Snack": [],
     Dinner: [],
   };
-  for (const m of (allMealsData ?? []) as unknown as {
+  for (const m of (mealsResult.data ?? []) as unknown as {
     id: string;
     name_en: string;
     name_hi: string;
     meal_type: Slot;
   }[]) {
-    mealsByType[m.meal_type].push({
-      id: m.id,
-      name_en: m.name_en,
-      name_hi: m.name_hi,
-    });
+    const lite = { id: m.id, name_en: m.name_en, name_hi: m.name_hi };
+    if (m.meal_type === "Lunch" || m.meal_type === "Dinner") {
+      mealsByType.Lunch.push(lite);
+      mealsByType.Dinner.push(lite);
+    } else {
+      mealsByType[m.meal_type].push(lite);
+    }
   }
 
-  const addonsByCategory: Record<
-    "Beverage" | "Side" | "Salad" | "Dessert",
-    { id: string; name_en: string; name_hi: string; category: "Beverage" | "Side" | "Salad" | "Dessert" }[]
-  > = { Beverage: [], Side: [], Salad: [], Dessert: [] };
-  for (const d of (addonsData ?? []) as unknown as {
-    id: string;
-    name_en: string;
-    name_hi: string;
-    category: "Beverage" | "Side" | "Salad" | "Dessert";
-  }[]) {
+  const addonsByCategory: Record<AddonCategory, AddonLite[]> = {
+    Beverage: [],
+    Side: [],
+    Salad: [],
+    Dessert: [],
+  };
+  for (const d of (addonsResult.data ?? []) as unknown as AddonLite[]) {
     addonsByCategory[d.category].push(d);
   }
-
-  const dates = rangeDays(startDate, days);
 
   return (
     <main>
@@ -176,75 +198,13 @@ export default async function PlannerPage({
         </div>
       </header>
 
-      <div className="space-y-6">
-        {dates.map((d) => {
-          const iso = formatISODate(d);
-          const isToday = iso === todayISO;
-          return (
-            <section
-              key={iso}
-              className={`rounded-lg border bg-white ${
-                isToday ? "border-black" : "border-zinc-200"
-              }`}
-            >
-              <div className="sticky top-0 z-20 flex items-center justify-between gap-2 rounded-t-lg border-b border-zinc-200 bg-zinc-50 px-4 py-3 sm:px-5">
-                <h2 className="flex items-baseline gap-2 text-base font-semibold text-black">
-                  {formatDayLabel(d)}
-                  {isToday && (
-                    <span className="rounded-md bg-black px-2 py-0.5 text-xs font-medium text-white">
-                      Today
-                    </span>
-                  )}
-                </h2>
-                <form action={randomiseDay.bind(null, iso)}>
-                  <RandomiseButton
-                    className="btn btn-secondary"
-                    iconSize={14}
-                    ariaLabel="Randomise day"
-                  >
-                    <span className="hidden sm:inline">Randomise day</span>
-                  </RandomiseButton>
-                </form>
-              </div>
-              <div className="grid gap-3 p-3 sm:p-4 md:grid-cols-2">
-                {SLOTS.map((slot) => {
-                  const row = byKey.get(`${iso}|${slot}`);
-                  const plan = {
-                    meals:
-                      row?.meal_plan_meals
-                        ?.sort((a, b) => a.position - b.position)
-                        .map((mm) => ({
-                          id: mm.meal.id,
-                          name_en: mm.meal.name_en,
-                          name_hi: mm.meal.name_hi,
-                        })) ?? [],
-                    addons:
-                      row?.meal_plan_addons?.map((ma) => ({
-                        id: ma.dish.id,
-                        name_en: ma.dish.name_en,
-                        name_hi: ma.dish.name_hi,
-                        category: ma.dish.category,
-                      })) ?? [],
-                    eating_out: row?.eating_out ?? false,
-                    guests: row?.guests ?? 0,
-                    today_note: row?.today_note ?? null,
-                  };
-                  return (
-                    <SlotCard
-                      key={slot}
-                      date={iso}
-                      slot={slot}
-                      plan={plan}
-                      availableMeals={mealsByType[slot]}
-                      availableAddons={addonsByCategory}
-                    />
-                  );
-                })}
-              </div>
-            </section>
-          );
-        })}
-      </div>
+      <PlannerBoard
+        dates={dates}
+        todayISO={todayISO}
+        slotPlans={slotPlans}
+        mealsByType={mealsByType}
+        addonsByCategory={addonsByCategory}
+      />
     </main>
   );
 }

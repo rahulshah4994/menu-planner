@@ -7,7 +7,6 @@ export interface AppSettings {
   household_size: number;
   no_repeat_days_breakfast: number;
   no_repeat_days_lunch: number;
-  no_repeat_days_evening_snack: number;
   no_repeat_days_dinner: number;
 }
 
@@ -18,7 +17,6 @@ const DEFAULTS: AppSettings = {
   household_size: 2,
   no_repeat_days_breakfast: 5,
   no_repeat_days_lunch: 7,
-  no_repeat_days_evening_snack: 3,
   no_repeat_days_dinner: 7,
 };
 
@@ -35,15 +33,13 @@ export async function getSettings(): Promise<AppSettings> {
 
 export function noRepeatDaysForSlot(
   settings: AppSettings,
-  slot: "Breakfast" | "Lunch" | "Evening Snack" | "Dinner"
+  slot: "Breakfast" | "Lunch" | "Dinner"
 ): number {
   switch (slot) {
     case "Breakfast":
       return settings.no_repeat_days_breakfast;
     case "Lunch":
       return settings.no_repeat_days_lunch;
-    case "Evening Snack":
-      return settings.no_repeat_days_evening_snack;
     case "Dinner":
       return settings.no_repeat_days_dinner;
   }
