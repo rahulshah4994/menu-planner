@@ -1,5 +1,6 @@
 import Link from "next/link";
-import { CaretLeft, CaretRight, Shuffle } from "@phosphor-icons/react/dist/ssr";
+import { CaretLeft, CaretRight } from "@phosphor-icons/react/dist/ssr";
+import { RandomiseButton } from "./submit-button";
 import { createClient } from "@/lib/supabase/server";
 import {
   addDays,
@@ -167,11 +168,10 @@ export default async function PlannerPage({
             action={randomiseRange.bind(null, startISO, days)}
             className="ml-auto sm:ml-0"
           >
-            <button type="submit" className="btn btn-primary">
-              <Shuffle size={16} weight="bold" />
+            <RandomiseButton className="btn btn-primary">
               <span className="hidden sm:inline">Randomise empty slots</span>
               <span className="sm:hidden">Randomise</span>
-            </button>
+            </RandomiseButton>
           </form>
         </div>
       </header>
@@ -183,11 +183,11 @@ export default async function PlannerPage({
           return (
             <section
               key={iso}
-              className={`overflow-hidden rounded-lg border bg-white ${
+              className={`rounded-lg border bg-white ${
                 isToday ? "border-black" : "border-zinc-200"
               }`}
             >
-              <div className="flex items-center justify-between gap-2 border-b border-zinc-200 bg-zinc-50 px-4 py-3 sm:px-5">
+              <div className="sticky top-0 z-20 flex items-center justify-between gap-2 rounded-t-lg border-b border-zinc-200 bg-zinc-50 px-4 py-3 sm:px-5">
                 <h2 className="flex items-baseline gap-2 text-base font-semibold text-black">
                   {formatDayLabel(d)}
                   {isToday && (
@@ -197,14 +197,13 @@ export default async function PlannerPage({
                   )}
                 </h2>
                 <form action={randomiseDay.bind(null, iso)}>
-                  <button
-                    type="submit"
+                  <RandomiseButton
                     className="btn btn-secondary"
-                    aria-label="Randomise day"
+                    iconSize={14}
+                    ariaLabel="Randomise day"
                   >
-                    <Shuffle size={14} weight="bold" />
                     <span className="hidden sm:inline">Randomise day</span>
-                  </button>
+                  </RandomiseButton>
                 </form>
               </div>
               <div className="grid gap-3 p-3 sm:p-4 md:grid-cols-2">

@@ -1,6 +1,17 @@
 "use client";
-import { useOptimistic, startTransition, useState } from "react";
-import { Shuffle, X, Trash, Plus } from "@phosphor-icons/react/dist/ssr";
+import {
+  useOptimistic,
+  startTransition,
+  useTransition,
+  useState,
+} from "react";
+import {
+  Shuffle,
+  CircleNotch,
+  X,
+  Trash,
+  Plus,
+} from "@phosphor-icons/react/dist/ssr";
 import { AddSheet } from "./add-sheet";
 import {
   addMealToSlot,
@@ -100,6 +111,7 @@ export function SlotCard({
     reduce
   );
   const [sheetOpen, setSheetOpen] = useState(false);
+  const [randomising, startRandomise] = useTransition();
 
   function onMealPick(meal: MealLite) {
     startTransition(async () => {
@@ -169,7 +181,7 @@ export function SlotCard({
   }
 
   function onRandomise() {
-    startTransition(async () => {
+    startRandomise(async () => {
       await randomiseSlot(date, slot);
     });
   }
@@ -191,10 +203,16 @@ export function SlotCard({
           <button
             type="button"
             onClick={onRandomise}
+            disabled={randomising}
             aria-label="Randomise this slot"
-            className="rounded-md p-2 text-zinc-500 hover:bg-zinc-100 hover:text-black"
+            aria-busy={randomising}
+            className="rounded-md p-2 text-zinc-500 hover:bg-zinc-100 hover:text-black disabled:opacity-60"
           >
-            <Shuffle size={16} weight="bold" />
+            {randomising ? (
+              <CircleNotch size={16} weight="bold" className="animate-spin" />
+            ) : (
+              <Shuffle size={16} weight="bold" />
+            )}
           </button>
           <button
             type="button"
