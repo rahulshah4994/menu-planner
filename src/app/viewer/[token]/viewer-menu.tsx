@@ -198,15 +198,22 @@ export function ViewerMenu({
       </header>
 
       {/* Day-wise calendar columns — swipe sideways for more days. */}
-      <div className="flex snap-x snap-mandatory gap-4 overflow-x-auto pb-4">
+      <div className="flex snap-x snap-mandatory gap-2 overflow-x-auto p-1 pb-4">
         {dates.map((iso) => {
           const dl = dayLabel(iso, todayISO, tomorrowISO);
+          const isToday = iso === todayISO;
           return (
             <section
               key={iso}
-              className="flex w-72 shrink-0 snap-start flex-col"
+              className={`flex w-72 shrink-0 snap-start flex-col rounded-xl p-3 ${
+                isToday ? "bg-emerald-50 ring-2 ring-emerald-400" : ""
+              }`}
             >
-              <h2 className="text-2xl font-bold tracking-tight text-black">
+              <h2
+                className={`text-2xl font-bold tracking-tight ${
+                  isToday ? "text-emerald-800" : "text-black"
+                }`}
+              >
                 {lang === "en" ? dl.en : dl.hi}
               </h2>
               {lang !== "en" && (

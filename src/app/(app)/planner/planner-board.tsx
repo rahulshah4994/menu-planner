@@ -41,7 +41,7 @@ export function PlannerBoard({
 
   return (
     <>
-      <div className="flex gap-3 overflow-x-auto pb-4">
+      <div className="flex gap-3 overflow-x-auto p-1 pb-4">
         {dates.map((iso) => (
           <DayColumn
             key={iso}
@@ -83,14 +83,26 @@ function DayColumn({
   return (
     <section
       className={`flex w-60 shrink-0 flex-col rounded-lg border bg-white ${
-        isToday ? "border-black" : "border-zinc-200"
+        isToday
+          ? "border-emerald-400 ring-2 ring-emerald-400/30"
+          : "border-zinc-200"
       }`}
     >
-      <div className="flex items-center justify-between gap-2 rounded-t-lg border-b border-zinc-200 bg-zinc-50 px-3 py-2">
-        <h2 className="flex items-center gap-1.5 text-sm font-semibold text-black">
+      <div
+        className={`flex items-center justify-between gap-2 rounded-t-lg border-b px-3 py-2 ${
+          isToday
+            ? "border-emerald-200 bg-emerald-50"
+            : "border-zinc-200 bg-zinc-50"
+        }`}
+      >
+        <h2
+          className={`flex items-center gap-1.5 text-sm font-semibold ${
+            isToday ? "text-emerald-800" : "text-black"
+          }`}
+        >
           {dayLabel(iso)}
           {isToday && (
-            <span className="rounded bg-black px-1.5 py-0.5 text-[10px] font-medium text-white">
+            <span className="rounded bg-emerald-600 px-1.5 py-0.5 text-[10px] font-medium text-white">
               Today
             </span>
           )}
