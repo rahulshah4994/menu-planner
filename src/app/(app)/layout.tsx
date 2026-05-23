@@ -13,12 +13,25 @@ export default async function AppLayout({
     <div className="min-h-screen bg-white">
       <nav className="border-b border-zinc-200">
         <div className="mx-auto flex max-w-6xl items-center justify-between px-4 py-4 sm:px-6">
-          <Link
-            href="/"
-            className="text-base font-semibold tracking-tight text-black"
-          >
-            Menu Planner
-          </Link>
+          <div className="flex items-center gap-3">
+            <Link
+              href="/"
+              className="text-base font-semibold tracking-tight text-black"
+            >
+              Menu Planner
+            </Link>
+            <div className="inline-flex rounded-full border border-zinc-200 p-0.5 text-[11px] font-medium">
+              <span className="rounded-full bg-black px-2 py-0.5 text-white">
+                v1
+              </span>
+              <Link
+                href="/v2/planner"
+                className="rounded-full px-2 py-0.5 text-zinc-500 hover:text-black"
+              >
+                v2
+              </Link>
+            </div>
+          </div>
           <div className="flex items-center gap-6 text-sm">
             <div className="hidden items-center gap-6 sm:flex">
             <Link
