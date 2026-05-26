@@ -1,10 +1,11 @@
 "use client";
 import { useState, useTransition } from "react";
+import CreatableSelect from "react-select/creatable";
 import type { Food } from "@/lib/v2/types";
 
 export function FoodForm({
   initial,
-  categories,
+  categories: categoryOptions,
   action,
 }: {
   initial?: Partial<Food>;
@@ -13,7 +14,9 @@ export function FoodForm({
 }) {
   const [name, setName] = useState(initial?.name ?? "");
   const [nameHi, setNameHi] = useState(initial?.name_hi ?? "");
-  const [category, setCategory] = useState(initial?.category ?? "");
+  const [categories, setCategories] = useState<string[]>(
+    initial?.categories ?? []
+  );
   const [ingredients, setIngredients] = useState(initial?.ingredients ?? "");
   const [ingredientsHi, setIngredientsHi] = useState(
     initial?.ingredients_hi ?? ""
@@ -34,7 +37,7 @@ export function FoodForm({
         headers: { "content-type": "application/json" },
         body: JSON.stringify({
           name_en: name,
-          category: category.trim() || "general",
+          category: categories[0]?.trim() || "general",
         }),
       });
       if (!res.ok) {
@@ -51,6 +54,9 @@ export function FoodForm({
       setIngredientsHi(data.ingredients_hi.join(", "));
     });
   }
+
+  const options = categoryOptions.map((c) => ({ value: c, label: c }));
+  const selected = categories.map((c) => ({ value: c, label: c }));
 
   return (
     <form action={action} className="max-w-xl space-y-4">
@@ -86,21 +92,23 @@ export function FoodForm({
       </div>
       {err && <p className="text-xs text-red-700">{err}</p>}
 
-      <Field label="Category">
-        <input
-          name="category"
-          value={category}
-          onChange={(e) => setCategory(e.target.value)}
-          list="food-categories"
-          autoComplete="off"
-          disabled={filling}
-          className="input"
+      <Field label="Categories">
+        <CreatableSelect
+          isMulti
+          isClearable
+          options={options}
+          value={selected}
+          onChange={(opts) =>
+            setCategories(opts.map((o) => o.value).filter(Boolean))
+          }
+          isDisabled={filling}
+          instanceId="food-categories"
+          placeholder="Search or create..."
+          formatCreateLabel={(input) => `Add "${input}"`}
         />
-        <datalist id="food-categories">
-          {categories.map((c) => (
-            <option key={c} value={c} />
-          ))}
-        </datalist>
+        {categories.map((c) => (
+          <input key={c} type="hidden" name="categories" value={c} />
+        ))}
       </Field>
 
       <Field label="Ingredients — English (comma-separated)">

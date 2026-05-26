@@ -7,7 +7,7 @@ import { z } from "zod";
 const schema = z.object({
   name: z.string().trim().min(1),
   name_hi: z.string().trim(),
-  category: z.string().trim(),
+  categories: z.array(z.string().trim().min(1)).default([]),
   ingredients: z.string().trim(),
   ingredients_hi: z.string().trim(),
   recipe_url: z
@@ -24,10 +24,14 @@ const schema = z.object({
 });
 
 function parse(fd: FormData) {
+  const categories = fd
+    .getAll("categories")
+    .map((v) => String(v).trim())
+    .filter(Boolean);
   return schema.parse({
     name: fd.get("name"),
     name_hi: fd.get("name_hi") ?? "",
-    category: fd.get("category") ?? "",
+    categories,
     ingredients: fd.get("ingredients") ?? "",
     ingredients_hi: fd.get("ingredients_hi") ?? "",
     recipe_url: fd.get("recipe_url") ?? "",

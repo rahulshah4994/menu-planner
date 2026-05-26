@@ -30,7 +30,7 @@ export default async function FoodsPage() {
             <tr>
               <th className="th-base">Name</th>
               <th className="th-base">Hindi</th>
-              <th className="th-base">Category</th>
+              <th className="th-base">Categories</th>
               <th className="th-base">Status</th>
               <th className="th-base"></th>
             </tr>
@@ -41,9 +41,13 @@ export default async function FoodsPage() {
                 <td className="td-base font-medium text-black">{f.name}</td>
                 <td className="td-base text-zinc-700">{f.name_hi}</td>
                 <td className="td-base">
-                  {f.category && (
-                    <span className="tag-soft">{f.category}</span>
-                  )}
+                  <div className="flex flex-wrap gap-1">
+                    {f.categories?.map((c) => (
+                      <span key={c} className="tag-soft">
+                        {c}
+                      </span>
+                    ))}
+                  </div>
                 </td>
                 <td className="td-base text-zinc-500">
                   {f.active ? "Active" : "Archived"}

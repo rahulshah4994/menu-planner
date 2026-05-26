@@ -1,5 +1,6 @@
 import { notFound } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
+import { mergeCategories } from "@/lib/v2/categories";
 import type { Food } from "@/lib/v2/types";
 import { FoodForm } from "../food-form";
 import { updateFood } from "../actions";
@@ -13,17 +14,14 @@ export default async function EditFoodPage({
   const supabase = await createClient();
   const [{ data: food }, { data: cats }] = await Promise.all([
     supabase.from("foods").select("*").eq("id", id).single(),
-    supabase.from("foods").select("category"),
+    supabase.from("foods").select("categories"),
   ]);
   if (!food) notFound();
 
-  const categories = [
-    ...new Set(
-      ((cats ?? []) as { category: string }[])
-        .map((r) => r.category)
-        .filter(Boolean)
-    ),
-  ].sort();
+  const fromDb = ((cats ?? []) as { categories: string[] | null }[])
+    .flatMap((r) => r.categories ?? [])
+    .filter(Boolean);
+  const categories = mergeCategories(fromDb);
 
   return (
     <main>

@@ -4,7 +4,7 @@ export interface Food {
   id: string;
   name: string;
   name_hi: string;
-  category: string;
+  categories: string[];
   ingredients: string;
   ingredients_hi: string;
   recipe_url: string | null;
@@ -39,7 +39,7 @@ export interface DaySlot {
   created_at: string;
 }
 
-export type FoodLite = Pick<Food, "id" | "name" | "name_hi" | "category">;
+export type FoodLite = Pick<Food, "id" | "name" | "name_hi" | "categories">;
 
 /** A slot plus the foods placed in it — the shape the planner UI consumes. */
 export interface SlotWithFoods extends DaySlot {

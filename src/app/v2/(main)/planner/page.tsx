@@ -1,141 +1,176 @@
 import Link from "next/link";
+import { CaretLeft, CaretRight } from "@phosphor-icons/react/dist/ssr";
 import { createClient } from "@/lib/supabase/server";
+import { getSettings } from "@/lib/settings";
 import {
-  addDaysISO,
-  dateLabel,
-  dayPlanId,
-  slotId,
-  todayISO,
-} from "@/lib/v2/ids";
+  addDays,
+  formatISODate,
+  formatWeekRangeLabel,
+  parseISODate,
+  rangeDays,
+} from "@/lib/dates";
+import { dayPlanId, slotId } from "@/lib/v2/ids";
 import type {
   DaySlot,
   FoodLite,
   SlotTemplate,
   SlotWithFoods,
 } from "@/lib/v2/types";
-import { DayPlanner } from "./day-planner";
+import { PlannerBoard, type PlannerDay } from "./planner-board";
 
 export const dynamic = "force-dynamic";
 
 export default async function V2PlannerPage({
   searchParams,
 }: {
-  searchParams: Promise<{ date?: string }>;
+  searchParams: Promise<{ start?: string }>;
 }) {
-  const { date: dateParam } = await searchParams;
-  const date =
-    dateParam && /^\d{4}-\d{2}-\d{2}$/.test(dateParam)
-      ? dateParam
-      : todayISO();
-  const id = dayPlanId(date);
+  const { start } = await searchParams;
+  const settings = await getSettings();
+  const horizon = settings.planning_horizon_days;
+
+  const todayDate = new Date();
+  todayDate.setHours(0, 0, 0, 0);
+  const todayISO = formatISODate(todayDate);
+  const startDate = start && /^\d{4}-\d{2}-\d{2}$/.test(start)
+    ? parseISODate(start)
+    : todayDate;
+  const startISO = formatISODate(startDate);
+  const prevStart = formatISODate(addDays(startDate, -horizon));
+  const nextStart = formatISODate(addDays(startDate, horizon));
+  const dates = rangeDays(startDate, horizon).map((d) => formatISODate(d));
+  const planIds = dates.map((d) => dayPlanId(d));
+
   const supabase = await createClient();
 
-  // Ensure the day exists.
+  // Ensure a day_plan row exists for each visible day.
   await supabase
     .from("day_plans")
-    .upsert({ id, plan_date: date }, { onConflict: "id" });
+    .upsert(
+      dates.map((d, i) => ({ id: planIds[i], plan_date: d })),
+      { onConflict: "id" }
+    );
 
-  // Seed slots from the template the first time a day is opened.
+  // Load slots for the range.
   let { data: slotData } = await supabase
     .from("day_slots")
     .select("*")
-    .eq("day_plan_id", id)
+    .in("day_plan_id", planIds)
     .order("position");
-  if (!slotData || slotData.length === 0) {
-    const { data: templates } = await supabase
+  let slots = (slotData ?? []) as DaySlot[];
+
+  // Seed templates for any unplanned days.
+  const planned = new Set(slots.map((s) => s.day_plan_id));
+  const toSeed = planIds.filter((pid) => !planned.has(pid));
+  if (toSeed.length) {
+    const { data: tplData } = await supabase
       .from("slot_templates")
       .select("*")
       .order("position");
-    const tpl = (templates ?? []) as SlotTemplate[];
-    if (tpl.length > 0) {
-      await supabase.from("day_slots").insert(
-        tpl.map((t, i) => ({
-          id: slotId(id, i + 1),
-          day_plan_id: id,
+    const templates = (tplData ?? []) as SlotTemplate[];
+    if (templates.length) {
+      const inserts = toSeed.flatMap((pid) =>
+        templates.map((t, i) => ({
+          id: slotId(pid, i + 1),
+          day_plan_id: pid,
           slot_no: i + 1,
           name: t.name,
           color: t.color,
           position: i + 1,
         }))
       );
-      slotData = (
-        await supabase
-          .from("day_slots")
-          .select("*")
-          .eq("day_plan_id", id)
-          .order("position")
-      ).data;
+      await supabase.from("day_slots").insert(inserts);
+      const refetch = await supabase
+        .from("day_slots")
+        .select("*")
+        .in("day_plan_id", planIds)
+        .order("position");
+      slots = (refetch.data ?? []) as DaySlot[];
     }
   }
-  const slots = (slotData ?? []) as DaySlot[];
 
-  // Foods placed in those slots.
+  // Fetch foods placed in those slots.
   const slotIds = slots.map((s) => s.id);
-  const { data: sfData } = slotIds.length
-    ? await supabase
-        .from("day_slot_foods")
-        .select(
-          "day_slot_id, position, food:foods(id,name,name_hi,category)"
-        )
-        .in("day_slot_id", slotIds)
-        .order("position")
-    : { data: [] };
-  const bySlot = new Map<number, FoodLite[]>();
-  for (const row of (sfData ?? []) as unknown as {
-    day_slot_id: number;
-    food: FoodLite | null;
-  }[]) {
-    if (!row.food) continue;
-    const arr = bySlot.get(row.day_slot_id) ?? [];
-    arr.push(row.food);
-    bySlot.set(row.day_slot_id, arr);
+  const foodsBySlot = new Map<number, FoodLite[]>();
+  if (slotIds.length) {
+    const { data: sf } = await supabase
+      .from("day_slot_foods")
+      .select(
+        "day_slot_id, position, food:foods(id,name,name_hi,categories)"
+      )
+      .in("day_slot_id", slotIds)
+      .order("position");
+    for (const row of (sf ?? []) as unknown as {
+      day_slot_id: number;
+      food: FoodLite | null;
+    }[]) {
+      if (!row.food) continue;
+      const arr = foodsBySlot.get(row.day_slot_id) ?? [];
+      arr.push(row.food);
+      foodsBySlot.set(row.day_slot_id, arr);
+    }
   }
-  const slotsWithFoods: SlotWithFoods[] = slots.map((s) => ({
-    ...s,
-    foods: bySlot.get(s.id) ?? [],
+
+  const slotsByPlan = new Map<number, SlotWithFoods[]>();
+  for (const s of slots) {
+    const arr = slotsByPlan.get(s.day_plan_id) ?? [];
+    arr.push({ ...s, foods: foodsBySlot.get(s.id) ?? [] });
+    slotsByPlan.set(s.day_plan_id, arr);
+  }
+
+  const days: PlannerDay[] = dates.map((date) => ({
+    date,
+    planId: dayPlanId(date),
+    slots: slotsByPlan.get(dayPlanId(date)) ?? [],
   }));
 
   // Catalog for the picker.
   const { data: foodData } = await supabase
     .from("foods")
-    .select("id,name,name_hi,category")
+    .select("id,name,name_hi,categories")
     .eq("active", true)
     .order("name");
   const allFoods = (foodData ?? []) as FoodLite[];
 
   return (
     <main>
-      <header className="mb-6 flex flex-wrap items-center justify-between gap-3">
+      <header className="mb-6 flex flex-wrap items-end justify-between gap-3 sm:mb-8 sm:gap-4">
         <div>
           <h1 className="text-2xl font-semibold tracking-tight text-black sm:text-3xl">
             Planner
           </h1>
           <p className="mt-1 text-sm text-zinc-500">
-            {dateLabel(date)} · plan #{id}
+            {formatWeekRangeLabel(startDate, horizon)} · {horizon} days
           </p>
         </div>
-        <div className="flex items-center gap-2">
+        <div className="flex w-full items-center gap-2 sm:w-auto">
           <Link
-            href={`/v2/planner?date=${addDaysISO(date, -1)}`}
+            href={`/v2/planner?start=${prevStart}`}
             className="btn btn-secondary"
-            aria-label="Previous day"
+            aria-label={`Previous ${horizon} days`}
           >
-            ←
+            <CaretLeft size={16} weight="bold" />
           </Link>
           <Link href="/v2/planner" className="btn btn-secondary">
             Today
           </Link>
           <Link
-            href={`/v2/planner?date=${addDaysISO(date, 1)}`}
+            href={`/v2/planner?start=${nextStart}`}
             className="btn btn-secondary"
-            aria-label="Next day"
+            aria-label={`Next ${horizon} days`}
           >
-            →
+            <CaretRight size={16} weight="bold" />
           </Link>
         </div>
       </header>
 
-      <DayPlanner dayPlanId={id} slots={slotsWithFoods} allFoods={allFoods} />
+      <PlannerBoard
+        days={days}
+        todayISO={todayISO}
+        allFoods={allFoods}
+        rangeStart={startISO}
+        rangeDays={horizon}
+      />
     </main>
   );
 }
