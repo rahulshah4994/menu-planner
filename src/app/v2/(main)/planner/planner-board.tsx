@@ -45,14 +45,19 @@ export function PlannerBoard({
   rangeDays,
 }: BoardProps) {
   const [open, setOpen] = useState<{
-    day: PlannerDay;
+    date: string;
     slotId: number;
   } | null>(null);
-  const [adding, setAdding] = useState<PlannerDay | null>(null);
+  const [addingDate, setAddingDate] = useState<string | null>(null);
   const [busyRange, startRange] = useTransition();
 
-  const openSlot = open
-    ? open.day.slots.find((s) => s.id === open.slotId) ?? null
+  const openDay = open ? days.find((d) => d.date === open.date) ?? null : null;
+  const openSlot =
+    openDay && open
+      ? openDay.slots.find((s) => s.id === open.slotId) ?? null
+      : null;
+  const addingDay = addingDate
+    ? days.find((d) => d.date === addingDate) ?? null
     : null;
 
   return (
@@ -83,33 +88,33 @@ export function PlannerBoard({
             key={day.date}
             day={day}
             isToday={day.date === todayISO}
-            onOpen={(slotId) => setOpen({ day, slotId })}
-            onAddSlot={() => setAdding(day)}
+            onOpen={(slotId) => setOpen({ date: day.date, slotId })}
+            onAddSlot={() => setAddingDate(day.date)}
           />
         ))}
       </div>
 
-      {open && openSlot && (
+      {openDay && openSlot && (
         <SlotEditor
-          date={open.day.date}
-          dayPlanId={open.day.planId}
+          date={openDay.date}
+          dayPlanId={openDay.planId}
           slot={openSlot}
-          allSlots={open.day.slots}
+          allSlots={openDay.slots}
           allFoods={allFoods}
           onClose={() => setOpen(null)}
         />
       )}
 
-      {adding && (
+      {addingDay && (
         <SlotNameModal
-          title={`Add slot · ${dayLabel(adding.date)}`}
+          title={`Add slot · ${dayLabel(addingDay.date)}`}
           defaultValue="Snack"
-          onCancel={() => setAdding(null)}
+          onCancel={() => setAddingDate(null)}
           onConfirm={(name) => {
-            const day = adding;
-            setAdding(null);
+            const planId = addingDay.planId;
+            setAddingDate(null);
             startTransition(async () => {
-              await addSlot(day.planId, name);
+              await addSlot(planId, name);
             });
           }}
         />

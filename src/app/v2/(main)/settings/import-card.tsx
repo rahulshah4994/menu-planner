@@ -14,7 +14,8 @@ export function ImportCard() {
       <p className="mt-1 max-w-2xl text-sm text-zinc-500">
         Download the template, fill in the Foods sheet, then upload it. Foods
         are matched by English name — existing ones are updated, new ones are
-        added.
+        added. Blank Hindi name / Hindi ingredient cells are filled in
+        automatically.
       </p>
 
       <a
@@ -55,6 +56,9 @@ export function ImportCard() {
               <p className="mt-0.5">
                 Foods: {state.foods.inserted} added, {state.foods.updated}{" "}
                 updated
+                {state.foods.autofilled > 0
+                  ? ` · ${state.foods.autofilled} auto-translated`
+                  : ""}
               </p>
             </div>
           )}

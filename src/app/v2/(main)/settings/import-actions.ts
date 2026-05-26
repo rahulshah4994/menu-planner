@@ -15,7 +15,7 @@ export async function importFoods(
     return {
       ok: false,
       error: "Please choose an .xlsx file.",
-      foods: { inserted: 0, updated: 0 },
+      foods: { inserted: 0, updated: 0, autofilled: 0 },
       warnings: [],
     };
   }
@@ -31,7 +31,7 @@ export async function importFoods(
     return {
       ok: false,
       error: `Could not read the file: ${(e as Error).message}`,
-      foods: { inserted: 0, updated: 0 },
+      foods: { inserted: 0, updated: 0, autofilled: 0 },
       warnings: [],
     };
   }

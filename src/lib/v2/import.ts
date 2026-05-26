@@ -1,5 +1,6 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 import * as XLSX from "xlsx";
+import { autofillFoodHindi } from "./autofill";
 
 export const FOOD_COLUMNS = [
   "Name (English)",
@@ -16,7 +17,7 @@ export const FOOD_COLUMNS = [
 export interface FoodsImportSummary {
   ok: boolean;
   error?: string;
-  foods: { inserted: number; updated: number };
+  foods: { inserted: number; updated: number; autofilled: number };
   warnings: string[];
 }
 
@@ -58,10 +59,16 @@ export function buildFoodsTemplateWorkbook(): Buffer {
     [],
     ["Columns"],
     ["Name (English)", "Required. Unique key used to match on re-import."],
-    ["Name (Hindi)", "Devanagari name shown to the cook."],
+    ["Name (Hindi)", "Devanagari name. Leave blank to auto-translate."],
     ["Categories", "Comma-separated. Free text, e.g. Lunch, Side."],
-    ["Ingredients (English)", "Comma-separated."],
-    ["Ingredients (Hindi)", "Comma-separated Devanagari."],
+    [
+      "Ingredients (English)",
+      "Comma-separated. Leave blank to auto-generate from the name.",
+    ],
+    [
+      "Ingredients (Hindi)",
+      "Comma-separated Devanagari. Leave blank to auto-translate.",
+    ],
     ["Recipe URL", "Optional link."],
     ["Weight (1-10)", "Default 5."],
     ["Notes", "Optional free text."],
@@ -112,7 +119,7 @@ export async function importFoodsFromBuffer(
     return {
       ok: false,
       error: "Missing sheet: Foods.",
-      foods: { inserted: 0, updated: 0 },
+      foods: { inserted: 0, updated: 0, autofilled: 0 },
       warnings: [],
     };
   }
@@ -128,6 +135,7 @@ export async function importFoodsFromBuffer(
 
   let inserted = 0;
   let updated = 0;
+  let autofilled = 0;
 
   for (const [i, row] of rows.entries()) {
     const name = s(row["Name (English)"]);
@@ -135,12 +143,40 @@ export async function importFoodsFromBuffer(
       warnings.push(`Foods row ${i + 2}: missing name — skipped.`);
       continue;
     }
+    const categories = splitList(row["Categories"]);
+    let name_hi = s(row["Name (Hindi)"]);
+    let ingredients = s(row["Ingredients (English)"]);
+    let ingredients_hi = s(row["Ingredients (Hindi)"]);
+
+    const needHi = !name_hi || !ingredients_hi;
+    const needEn = !ingredients && !ingredients_hi;
+    if (needHi || needEn) {
+      try {
+        const ai = await autofillFoodHindi({
+          name_en: name,
+          categories,
+          ingredients_en: ingredients,
+          ingredients_hi,
+        });
+        if (!name_hi && ai.name_hi) name_hi = ai.name_hi;
+        if (!ingredients && ai.ingredients) ingredients = ai.ingredients;
+        if (!ingredients_hi && ai.ingredients_hi) {
+          ingredients_hi = ai.ingredients_hi;
+        }
+        autofilled++;
+      } catch (e) {
+        warnings.push(
+          `Foods row ${i + 2} (${name}): autofill failed — ${(e as Error).message}`
+        );
+      }
+    }
+
     const payload = {
       name,
-      name_hi: s(row["Name (Hindi)"]),
-      categories: splitList(row["Categories"]),
-      ingredients: s(row["Ingredients (English)"]),
-      ingredients_hi: s(row["Ingredients (Hindi)"]),
+      name_hi,
+      categories,
+      ingredients,
+      ingredients_hi,
       recipe_url: s(row["Recipe URL"]) || null,
       weight: Math.max(1, Math.min(10, num(row["Weight (1-10)"], 5))),
       notes: s(row["Notes"]),
@@ -170,7 +206,7 @@ export async function importFoodsFromBuffer(
 
   return {
     ok: true,
-    foods: { inserted, updated },
+    foods: { inserted, updated, autofilled },
     warnings,
   };
 }
