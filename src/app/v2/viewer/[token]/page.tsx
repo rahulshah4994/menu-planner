@@ -99,6 +99,9 @@ export default async function V2ViewerPage({
           name: s.name,
           color: s.color,
           position: s.position,
+          people_eating: s.people_eating,
+          notes: s.notes,
+          eating_out: s.eating_out,
           foods: foodsBySlot.get(s.id) ?? [],
         })),
       };
@@ -110,6 +113,9 @@ export default async function V2ViewerPage({
         name: t.name,
         color: t.color,
         position: i + 1,
+        people_eating: null,
+        notes: "",
+        eating_out: false,
         foods: [],
       })),
     };
@@ -123,6 +129,7 @@ export default async function V2ViewerPage({
       token={token}
       prevStart={prevStart}
       nextStart={nextStart}
+      defaultPeople={settings.household_size}
     />
   );
 }

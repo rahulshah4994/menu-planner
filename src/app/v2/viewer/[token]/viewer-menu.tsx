@@ -1,7 +1,15 @@
 "use client";
 import { useEffect, useState } from "react";
 import Link from "next/link";
-import { CaretLeft, CaretRight } from "@phosphor-icons/react/dist/ssr";
+import {
+  CaretLeft,
+  CaretRight,
+  ForkKnife,
+  NotePencil,
+  Rows,
+  SquaresFour,
+  Users,
+} from "@phosphor-icons/react/dist/ssr";
 import {
   addDays,
   formatISODate,
@@ -10,6 +18,7 @@ import {
 } from "@/lib/dates";
 
 type Lang = "hi" | "en" | "both";
+type Layout = "horizontal" | "vertical";
 
 const DAY_HINDI = [
   "रविवार",
@@ -41,6 +50,9 @@ export interface ViewerSlot {
   name: string;
   color: string;
   position: number;
+  people_eating: number | null;
+  notes: string;
+  eating_out: boolean;
   foods: ViewerFood[];
 }
 
@@ -82,6 +94,7 @@ export function ViewerMenu({
   token,
   prevStart,
   nextStart,
+  defaultPeople,
 }: {
   dates: string[];
   days: ViewerDay[];
@@ -89,8 +102,10 @@ export function ViewerMenu({
   token: string;
   prevStart: string;
   nextStart: string;
+  defaultPeople: number;
 }) {
   const [lang, setLang] = useState<Lang>("both");
+  const [layout, setLayout] = useState<Layout>("vertical");
 
   useEffect(() => {
     const saved = localStorage.getItem("viewer-lang");
@@ -98,10 +113,23 @@ export function ViewerMenu({
       // eslint-disable-next-line react-hooks/set-state-in-effect -- one-time hydration-safe read of the saved choice
       setLang(saved);
     }
+    const savedLayout = localStorage.getItem("viewer-layout");
+    // Phones default to vertical; larger screens default to horizontal.
+    const nextLayout: Layout =
+      savedLayout === "horizontal" || savedLayout === "vertical"
+        ? savedLayout
+        : typeof window !== "undefined" &&
+          window.matchMedia("(min-width: 768px)").matches
+        ? "horizontal"
+        : "vertical";
+    setLayout(nextLayout);
   }, []);
   useEffect(() => {
     localStorage.setItem("viewer-lang", lang);
   }, [lang]);
+  useEffect(() => {
+    localStorage.setItem("viewer-layout", layout);
+  }, [layout]);
 
   const byDate = new Map<string, ViewerDay>();
   for (const d of days) byDate.set(d.date, d);
@@ -156,25 +184,59 @@ export function ViewerMenu({
           </div>
         )}
 
-        <div className="mt-4 inline-flex rounded-lg border border-zinc-300 p-0.5">
-          {(["hi", "en", "both"] as Lang[]).map((l) => (
+        <div className="mt-4 flex flex-wrap items-center gap-2">
+          <div className="inline-flex rounded-lg border border-zinc-300 p-0.5">
+            {(["hi", "en", "both"] as Lang[]).map((l) => (
+              <button
+                key={l}
+                type="button"
+                onClick={() => setLang(l)}
+                className={`rounded-md px-3 py-1.5 text-sm font-medium transition-colors ${
+                  lang === l
+                    ? "bg-black text-white"
+                    : "text-zinc-600 hover:text-black"
+                }`}
+              >
+                {LANG_LABEL[l]}
+              </button>
+            ))}
+          </div>
+          <div className="inline-flex rounded-lg border border-zinc-300 p-0.5">
             <button
-              key={l}
               type="button"
-              onClick={() => setLang(l)}
+              onClick={() => setLayout("vertical")}
+              aria-label="Stack days vertically"
               className={`rounded-md px-3 py-1.5 text-sm font-medium transition-colors ${
-                lang === l
+                layout === "vertical"
                   ? "bg-black text-white"
                   : "text-zinc-600 hover:text-black"
               }`}
             >
-              {LANG_LABEL[l]}
+              <Rows size={14} weight="bold" />
             </button>
-          ))}
+            <button
+              type="button"
+              onClick={() => setLayout("horizontal")}
+              aria-label="Scroll days horizontally"
+              className={`rounded-md px-3 py-1.5 text-sm font-medium transition-colors ${
+                layout === "horizontal"
+                  ? "bg-black text-white"
+                  : "text-zinc-600 hover:text-black"
+              }`}
+            >
+              <SquaresFour size={14} weight="bold" />
+            </button>
+          </div>
         </div>
       </header>
 
-      <div className="flex snap-x snap-mandatory gap-2 overflow-x-auto p-1 pb-4">
+      <div
+        className={
+          layout === "horizontal"
+            ? "flex snap-x snap-mandatory gap-2 overflow-x-auto p-1 pb-4"
+            : "flex flex-col gap-3 p-1 pb-4"
+        }
+      >
         {dates.map((iso) => {
           const dl = dayLabel(iso, todayISO, tomorrowISO);
           const isToday = iso === todayISO;
@@ -183,9 +245,11 @@ export function ViewerMenu({
           return (
             <section
               key={iso}
-              className={`flex w-72 shrink-0 snap-start flex-col rounded-xl p-3 ${
-                isToday ? "bg-emerald-50 ring-2 ring-emerald-400" : ""
-              }`}
+              className={`flex flex-col rounded-xl p-3 ${
+                layout === "horizontal"
+                  ? "w-72 shrink-0 snap-start"
+                  : "w-full"
+              } ${isToday ? "bg-emerald-50 ring-2 ring-emerald-400" : ""}`}
             >
               <h2
                 className={`text-2xl font-bold tracking-tight ${
@@ -200,7 +264,12 @@ export function ViewerMenu({
 
               <div className="mt-3 flex flex-col gap-3">
                 {slots.map((s) => (
-                  <SlotBlock key={s.id} slot={s} lang={lang} />
+                  <SlotBlock
+                    key={s.id}
+                    slot={s}
+                    lang={lang}
+                    defaultPeople={defaultPeople}
+                  />
                 ))}
                 {slots.length === 0 && (
                   <p className="text-sm text-zinc-400">
@@ -222,10 +291,20 @@ export function ViewerMenu({
   );
 }
 
-function SlotBlock({ slot, lang }: { slot: ViewerSlot; lang: Lang }) {
+function SlotBlock({
+  slot,
+  lang,
+  defaultPeople,
+}: {
+  slot: ViewerSlot;
+  lang: Lang;
+  defaultPeople: number;
+}) {
   const bg = hexAlpha(slot.color, 0.18);
   const border = hexAlpha(slot.color, 0.55);
   const empty = slot.foods.length === 0;
+  const peopleOverride =
+    slot.people_eating !== null && slot.people_eating !== defaultPeople;
 
   return (
     <div
@@ -236,7 +315,27 @@ function SlotBlock({ slot, lang }: { slot: ViewerSlot; lang: Lang }) {
         <h3 className="text-sm font-semibold text-zinc-800">{slot.name}</h3>
       </div>
 
-      {empty ? (
+      {peopleOverride && (
+        <div className="mt-2 inline-flex items-center gap-1.5 rounded-md border-2 border-amber-500 bg-amber-100 px-2 py-1 text-sm font-semibold text-amber-900">
+          <Users size={15} weight="bold" />
+          {lang === "en"
+            ? `${slot.people_eating} eating (default ${defaultPeople})`
+            : lang === "hi"
+            ? `${slot.people_eating} खाने वाले (सामान्य ${defaultPeople})`
+            : `${slot.people_eating} खाने वाले · eating (default ${defaultPeople})`}
+        </div>
+      )}
+
+      {slot.eating_out ? (
+        <p className="mt-2 inline-flex items-center gap-1.5 rounded-md bg-amber-50 px-2 py-1 text-sm font-medium text-amber-900 ring-1 ring-amber-300">
+          <ForkKnife size={14} weight="bold" />
+          {lang === "hi"
+            ? "बाहर खाना"
+            : lang === "en"
+            ? "Eating out"
+            : "बाहर खाना · Eating out"}
+        </p>
+      ) : empty ? (
         <p className="mt-2 text-sm text-zinc-400">
           {lang === "en" ? "— nothing planned —" : "— कुछ नहीं चुना —"}
         </p>
@@ -246,6 +345,17 @@ function SlotBlock({ slot, lang }: { slot: ViewerSlot; lang: Lang }) {
             <FoodLine key={f.id} food={f} lang={lang} />
           ))}
         </div>
+      )}
+
+      {slot.notes && (
+        <p className="mt-3 flex items-start gap-1.5 rounded-md border border-amber-300 bg-amber-50 px-2 py-1.5 text-sm text-zinc-800">
+          <NotePencil
+            size={14}
+            weight="bold"
+            className="mt-0.5 shrink-0 text-amber-700"
+          />
+          <span>{slot.notes}</span>
+        </p>
       )}
     </div>
   );

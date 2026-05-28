@@ -36,6 +36,9 @@ export interface DaySlot {
   name: string;
   color: string;
   position: number;
+  people_eating: number | null;
+  notes: string;
+  eating_out: boolean;
   created_at: string;
 }
 

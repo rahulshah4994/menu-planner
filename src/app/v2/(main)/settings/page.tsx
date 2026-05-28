@@ -88,7 +88,7 @@ export default async function V2SettingsPage() {
                 className="input"
               />
             </Field>
-            <Field label="Household size">
+            <Field label="Family members">
               <input
                 name="household_size"
                 type="number"

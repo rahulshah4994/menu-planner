@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { requireFamily } from "@/lib/auth";
+import { BottomNav } from "./bottom-nav";
 
 export default async function V2Layout({
   children,
@@ -30,7 +31,7 @@ export default async function V2Layout({
               </span>
             </div>
           </div>
-          <div className="flex items-center gap-5 text-sm">
+          <div className="hidden items-center gap-5 text-sm sm:flex">
             <Link
               href="/v2/planner"
               className="font-medium text-zinc-700 hover:text-black"
@@ -52,9 +53,10 @@ export default async function V2Layout({
           </div>
         </div>
       </nav>
-      <div className="mx-auto max-w-6xl px-4 py-6 sm:px-6 sm:py-10">
+      <div className="mx-auto max-w-6xl px-4 py-6 pb-24 sm:px-6 sm:py-10 sm:pb-10">
         {children}
       </div>
+      <BottomNav />
     </div>
   );
 }

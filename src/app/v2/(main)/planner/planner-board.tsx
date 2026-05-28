@@ -1,6 +1,15 @@
 "use client";
-import { startTransition, useState, useTransition } from "react";
-import { CircleNotch, Plus, Shuffle } from "@phosphor-icons/react/dist/ssr";
+import { startTransition, useEffect, useState, useTransition } from "react";
+import {
+  CircleNotch,
+  ForkKnife,
+  NotePencil,
+  Plus,
+  Rows,
+  Shuffle,
+  SquaresFour,
+  Users,
+} from "@phosphor-icons/react/dist/ssr";
 import { parseISODate } from "@/lib/dates";
 import type { FoodLite, SlotWithFoods } from "@/lib/v2/types";
 import { addSlot, randomizeDay, randomizeRange } from "./actions";
@@ -19,6 +28,7 @@ interface BoardProps {
   allFoods: FoodLite[];
   rangeStart: string;
   rangeDays: number;
+  defaultPeople: number;
 }
 
 function dayLabel(iso: string) {
@@ -43,6 +53,7 @@ export function PlannerBoard({
   allFoods,
   rangeStart,
   rangeDays,
+  defaultPeople,
 }: BoardProps) {
   const [open, setOpen] = useState<{
     date: string;
@@ -50,6 +61,23 @@ export function PlannerBoard({
   } | null>(null);
   const [addingDate, setAddingDate] = useState<string | null>(null);
   const [busyRange, startRange] = useTransition();
+  const [layout, setLayout] = useState<"horizontal" | "vertical">("vertical");
+
+  useEffect(() => {
+    const saved = localStorage.getItem("planner-layout");
+    const next: "horizontal" | "vertical" =
+      saved === "horizontal" || saved === "vertical"
+        ? saved
+        : typeof window !== "undefined" &&
+          window.matchMedia("(min-width: 768px)").matches
+        ? "horizontal"
+        : "vertical";
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- one-time hydration-safe read of the saved layout
+    setLayout(next);
+  }, []);
+  useEffect(() => {
+    localStorage.setItem("planner-layout", layout);
+  }, [layout]);
 
   const openDay = open ? days.find((d) => d.date === open.date) ?? null : null;
   const openSlot =
@@ -62,7 +90,33 @@ export function PlannerBoard({
 
   return (
     <>
-      <div className="mb-3 flex justify-end">
+      <div className="mb-3 flex flex-wrap items-center justify-end gap-2">
+        <div className="inline-flex rounded-md border border-zinc-300 p-0.5">
+          <button
+            type="button"
+            onClick={() => setLayout("vertical")}
+            aria-label="Stack days vertically"
+            className={`rounded px-2 py-1 text-xs font-medium transition-colors ${
+              layout === "vertical"
+                ? "bg-black text-white"
+                : "text-zinc-600 hover:text-black"
+            }`}
+          >
+            <Rows size={13} weight="bold" />
+          </button>
+          <button
+            type="button"
+            onClick={() => setLayout("horizontal")}
+            aria-label="Scroll days horizontally"
+            className={`rounded px-2 py-1 text-xs font-medium transition-colors ${
+              layout === "horizontal"
+                ? "bg-black text-white"
+                : "text-zinc-600 hover:text-black"
+            }`}
+          >
+            <SquaresFour size={13} weight="bold" />
+          </button>
+        </div>
         <button
           type="button"
           onClick={() =>
@@ -82,12 +136,20 @@ export function PlannerBoard({
         </button>
       </div>
 
-      <div className="flex gap-3 overflow-x-auto p-1 pb-4">
+      <div
+        className={
+          layout === "horizontal"
+            ? "flex gap-3 overflow-x-auto p-1 pb-4"
+            : "flex flex-col gap-3 p-1 pb-4"
+        }
+      >
         {days.map((day) => (
           <DayColumn
             key={day.date}
             day={day}
+            layout={layout}
             isToday={day.date === todayISO}
+            defaultPeople={defaultPeople}
             onOpen={(slotId) => setOpen({ date: day.date, slotId })}
             onAddSlot={() => setAddingDate(day.date)}
           />
@@ -101,6 +163,7 @@ export function PlannerBoard({
           slot={openSlot}
           allSlots={openDay.slots}
           allFoods={allFoods}
+          defaultPeople={defaultPeople}
           onClose={() => setOpen(null)}
         />
       )}
@@ -125,12 +188,16 @@ export function PlannerBoard({
 
 function DayColumn({
   day,
+  layout,
   isToday,
+  defaultPeople,
   onOpen,
   onAddSlot,
 }: {
   day: PlannerDay;
+  layout: "horizontal" | "vertical";
   isToday: boolean;
+  defaultPeople: number;
   onOpen: (slotId: number) => void;
   onAddSlot: () => void;
 }) {
@@ -138,7 +205,9 @@ function DayColumn({
 
   return (
     <section
-      className={`flex w-60 shrink-0 flex-col rounded-lg border bg-white ${
+      className={`flex flex-col rounded-lg border bg-white ${
+        layout === "horizontal" ? "w-60 shrink-0" : "w-full"
+      } ${
         isToday
           ? "border-emerald-400 ring-2 ring-emerald-400/30"
           : "border-zinc-200"
@@ -183,7 +252,12 @@ function DayColumn({
       </div>
       <div className="flex flex-col gap-2 p-2">
         {day.slots.map((slot) => (
-          <SlotCell key={slot.id} slot={slot} onOpen={() => onOpen(slot.id)} />
+          <SlotCell
+            key={slot.id}
+            slot={slot}
+            defaultPeople={defaultPeople}
+            onOpen={() => onOpen(slot.id)}
+          />
         ))}
         {day.slots.length === 0 && (
           <p className="px-2 py-2 text-center text-xs italic text-zinc-400">
@@ -205,18 +279,24 @@ function DayColumn({
 
 function SlotCell({
   slot,
+  defaultPeople,
   onOpen,
 }: {
   slot: SlotWithFoods;
+  defaultPeople: number;
   onOpen: () => void;
 }) {
   const bg = hexAlpha(slot.color, 0.18);
   const border = hexAlpha(slot.color, 0.55);
   const isEmpty = slot.foods.length === 0;
+  const peopleOverride =
+    slot.people_eating !== null && slot.people_eating !== defaultPeople;
 
   return (
-    <div
-      className="rounded-md border p-2"
+    <button
+      type="button"
+      onClick={onOpen}
+      className="block w-full rounded-md border p-2 text-left transition-colors hover:brightness-95"
       style={{ backgroundColor: bg, borderColor: border }}
     >
       <div className="flex items-center justify-between">
@@ -224,12 +304,13 @@ function SlotCell({
           {slot.name}
         </span>
       </div>
-      <button
-        type="button"
-        onClick={onOpen}
-        className="mt-1 block w-full text-left"
-      >
-        {isEmpty ? (
+      <div className="mt-1">
+        {slot.eating_out ? (
+          <span className="inline-flex items-center gap-1 rounded bg-amber-100 px-1.5 py-0.5 text-xs font-medium text-amber-900 ring-1 ring-amber-300">
+            <ForkKnife size={12} weight="bold" />
+            Eating out
+          </span>
+        ) : isEmpty ? (
           <span className="text-xs italic text-zinc-400">+ Tap to plan</span>
         ) : (
           <div className="space-y-0.5">
@@ -240,7 +321,29 @@ function SlotCell({
             ))}
           </div>
         )}
-      </button>
-    </div>
+      </div>
+      {(peopleOverride || slot.notes) && (
+        <div className="mt-1.5 flex flex-wrap items-center gap-1">
+          {peopleOverride && (
+            <span
+              className="inline-flex items-center gap-0.5 rounded bg-amber-100 px-1.5 py-0.5 text-[10px] font-semibold text-amber-900 ring-1 ring-amber-400"
+              title={`Default is ${defaultPeople}`}
+            >
+              <Users size={11} weight="bold" />
+              {slot.people_eating}
+            </span>
+          )}
+          {slot.notes && (
+            <span
+              className="inline-flex max-w-full items-center gap-0.5 truncate rounded bg-amber-100 px-1.5 py-0.5 text-[10px] font-medium text-amber-900 ring-1 ring-amber-300"
+              title={slot.notes}
+            >
+              <NotePencil size={11} weight="bold" />
+              <span className="truncate">{slot.notes}</span>
+            </span>
+          )}
+        </div>
+      )}
+    </button>
   );
 }

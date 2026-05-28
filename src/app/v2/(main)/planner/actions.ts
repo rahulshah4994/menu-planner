@@ -43,6 +43,35 @@ export async function recolorSlot(id: number, color: string) {
   revalidatePath(PLANNER);
 }
 
+export async function setPeopleEating(id: number, value: number | null) {
+  const supabase = await createClient();
+  const clamped =
+    value === null ? null : Math.max(0, Math.min(50, Math.floor(value)));
+  await supabase
+    .from("day_slots")
+    .update({ people_eating: clamped })
+    .eq("id", id);
+  revalidatePath(PLANNER);
+}
+
+export async function setSlotNotes(id: number, notes: string) {
+  const supabase = await createClient();
+  await supabase
+    .from("day_slots")
+    .update({ notes: notes.trim() })
+    .eq("id", id);
+  revalidatePath(PLANNER);
+}
+
+export async function setSlotEatingOut(id: number, eating_out: boolean) {
+  const supabase = await createClient();
+  await supabase
+    .from("day_slots")
+    .update({ eating_out })
+    .eq("id", id);
+  revalidatePath(PLANNER);
+}
+
 export async function deleteSlot(id: number) {
   const supabase = await createClient();
   await supabase.from("day_slots").delete().eq("id", id);
@@ -117,10 +146,14 @@ export async function randomizeDay(date: string) {
 
   const { data: slotData } = await supabase
     .from("day_slots")
-    .select("id, name")
+    .select("id, name, eating_out")
     .eq("day_plan_id", planId)
     .order("position");
-  const slots = (slotData ?? []) as { id: number; name: string }[];
+  const slots = (slotData ?? []) as {
+    id: number;
+    name: string;
+    eating_out: boolean;
+  }[];
   if (slots.length === 0) {
     revalidatePath(PLANNER);
     return;
@@ -139,6 +172,7 @@ export async function randomizeDay(date: string) {
 
   const used = new Set<string>();
   for (const slot of slots) {
+    if (slot.eating_out) continue;
     if (taken.has(slot.id)) continue;
     const foodId = await pickFood(supabase, slot.name, date, settings, {
       excludeFoodIds: used,

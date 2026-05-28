@@ -170,6 +170,7 @@ export default async function V2PlannerPage({
         allFoods={allFoods}
         rangeStart={startISO}
         rangeDays={horizon}
+        defaultPeople={settings.household_size}
       />
     </main>
   );

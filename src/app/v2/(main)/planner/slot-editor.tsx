@@ -2,6 +2,7 @@
 import {
   startTransition,
   useEffect,
+  useMemo,
   useOptimistic,
   useState,
 } from "react";
@@ -9,10 +10,13 @@ import {
   X,
   MagnifyingGlass,
   Check,
+  Funnel,
+  ForkKnife,
   Plus,
   Trash,
 } from "@phosphor-icons/react/dist/ssr";
 import { formatDayLabel, parseISODate } from "@/lib/dates";
+import { mergeCategories } from "@/lib/v2/categories";
 import type { FoodLite, SlotWithFoods } from "@/lib/v2/types";
 import {
   addFood,
@@ -22,6 +26,9 @@ import {
   recolorSlot,
   removeFood,
   renameSlot,
+  setPeopleEating,
+  setSlotEatingOut,
+  setSlotNotes,
 } from "./actions";
 import { SlotNameModal } from "./slot-name-modal";
 
@@ -53,6 +60,7 @@ export function SlotEditor({
   slot,
   allSlots,
   allFoods,
+  defaultPeople,
   onClose,
 }: {
   date: string;
@@ -60,12 +68,33 @@ export function SlotEditor({
   slot: SlotWithFoods;
   allSlots: SlotWithFoods[];
   allFoods: FoodLite[];
+  defaultPeople: number;
   onClose: () => void;
 }) {
   const [opt, dispatch] = useOptimistic(slot.foods, reduce);
   const [q, setQ] = useState("");
   const [nameDraft, setNameDraft] = useState(slot.name);
   const [addingSlot, setAddingSlot] = useState(false);
+  const [notesDraft, setNotesDraft] = useState(slot.notes ?? "");
+  const [filterOpen, setFilterOpen] = useState(false);
+  const [selectedCats, setSelectedCats] = useState<Set<string>>(new Set());
+  const peopleValue = slot.people_eating ?? defaultPeople;
+  const isOverride =
+    slot.people_eating !== null && slot.people_eating !== defaultPeople;
+
+  const allCategories = useMemo(
+    () => mergeCategories(allFoods.flatMap((f) => f.categories ?? [])),
+    [allFoods]
+  );
+
+  function toggleCategory(cat: string) {
+    setSelectedCats((prev) => {
+      const next = new Set(prev);
+      if (next.has(cat)) next.delete(cat);
+      else next.add(cat);
+      return next;
+    });
+  }
 
   useEffect(() => {
     document.body.style.overflow = "hidden";
@@ -127,17 +156,52 @@ export function SlotEditor({
     setAddingSlot(true);
   }
 
+  function onPeopleChange(next: number) {
+    const clamped = Math.max(0, Math.min(50, next));
+    startTransition(async () => {
+      await setPeopleEating(slot.id, clamped);
+    });
+  }
+
+  function onResetPeople() {
+    startTransition(async () => {
+      await setPeopleEating(slot.id, null);
+    });
+  }
+
+  function saveNotes() {
+    const v = notesDraft.trim();
+    if (v === (slot.notes ?? "")) return;
+    startTransition(async () => {
+      await setSlotNotes(slot.id, v);
+    });
+  }
+
+  function onEatingOut(value: boolean) {
+    startTransition(async () => {
+      await setSlotEatingOut(slot.id, value);
+    });
+  }
+
   const idx = allSlots.findIndex((s) => s.id === slot.id);
   const canMoveUp = idx > 0;
   const canMoveDown = idx >= 0 && idx < allSlots.length - 1;
 
   const norm = q.trim().toLowerCase();
-  const matches = allFoods.filter(
-    (f) =>
+  const selectedCatsLower = new Set(
+    Array.from(selectedCats).map((c) => c.trim().toLowerCase())
+  );
+  const matches = allFoods.filter((f) => {
+    const nameOk =
       !norm ||
       f.name.toLowerCase().includes(norm) ||
-      (f.name_hi ?? "").includes(q.trim())
-  );
+      (f.name_hi ?? "").includes(q.trim());
+    if (!nameOk) return false;
+    if (selectedCatsLower.size === 0) return true;
+    return (f.categories ?? []).some((c) =>
+      selectedCatsLower.has(c.trim().toLowerCase())
+    );
+  });
   const slotKey = slot.name.trim().toLowerCase();
   const matched = matches.filter((f) =>
     (f.categories ?? []).some((c) => c.trim().toLowerCase() === slotKey)
@@ -217,73 +281,229 @@ export function SlotEditor({
         </div>
 
         <div className="flex-1 overflow-y-auto overscroll-contain">
-          {opt.length > 0 && (
-            <div className="flex flex-wrap gap-1.5 border-b border-zinc-100 px-4 py-3">
-              {opt.map((f) => (
+          <div className="flex flex-wrap items-center gap-3 border-b border-zinc-100 px-4 py-3 text-sm">
+            <label className="flex items-center gap-2">
+              <input
+                type="checkbox"
+                checked={slot.eating_out}
+                onChange={(e) => onEatingOut(e.target.checked)}
+              />
+              <ForkKnife size={14} weight="bold" className="text-zinc-500" />
+              <span>Eating out</span>
+            </label>
+            <div
+              className={`ml-auto flex items-center gap-2 rounded-md ${
+                isOverride
+                  ? "border border-amber-400 bg-amber-50 px-2 py-1"
+                  : ""
+              }`}
+            >
+              <span className="text-zinc-600">People</span>
+              <button
+                type="button"
+                disabled={peopleValue <= 0}
+                onClick={() => onPeopleChange(peopleValue - 1)}
+                className="h-7 w-7 rounded-md border border-zinc-300 hover:bg-zinc-100 disabled:opacity-40"
+              >
+                −
+              </button>
+              <span
+                className={`min-w-[2ch] text-center font-semibold ${
+                  isOverride ? "text-amber-900" : "text-zinc-800"
+                }`}
+              >
+                {peopleValue}
+              </span>
+              <button
+                type="button"
+                onClick={() => onPeopleChange(peopleValue + 1)}
+                className="h-7 w-7 rounded-md border border-zinc-300 hover:bg-zinc-100"
+              >
+                +
+              </button>
+              {isOverride ? (
                 <button
-                  key={f.id}
                   type="button"
-                  onClick={() => toggle(f)}
-                  className="inline-flex items-center gap-1 rounded-md bg-black py-1 pl-2.5 pr-1.5 text-xs text-white"
+                  onClick={onResetPeople}
+                  title={`Reset to default (${defaultPeople})`}
+                  className="text-xs font-medium text-amber-800 underline"
                 >
-                  {f.name}
-                  <X size={12} weight="bold" />
+                  reset
                 </button>
-              ))}
+              ) : (
+                <span className="text-xs text-zinc-400">
+                  default · {defaultPeople}
+                </span>
+              )}
             </div>
+          </div>
+
+          {!slot.eating_out && (
+            <>
+              {opt.length > 0 && (
+                <div className="flex flex-wrap gap-2 border-b border-zinc-100 px-4 py-3">
+                  {opt.map((f) => (
+                    <button
+                      key={f.id}
+                      type="button"
+                      onClick={() => toggle(f)}
+                      className="inline-flex items-center gap-1.5 rounded-md bg-black py-1.5 pl-3 pr-2 text-sm font-semibold text-white"
+                    >
+                      {f.name}
+                      <X size={14} weight="bold" />
+                    </button>
+                  ))}
+                </div>
+              )}
+
+              <div className="space-y-2 px-4 py-3">
+                <div className="flex items-center gap-2">
+                  <div className="relative flex-1">
+                    <MagnifyingGlass
+                      size={16}
+                      className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-zinc-400"
+                    />
+                    <input
+                      value={q}
+                      onChange={(e) => setQ(e.target.value)}
+                      placeholder="Search foods…"
+                      className="input pl-9"
+                    />
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => setFilterOpen((v) => !v)}
+                    aria-label="Filter by category"
+                    aria-expanded={filterOpen}
+                    className={`relative inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-md border transition-colors ${
+                      filterOpen || selectedCats.size > 0
+                        ? "border-black bg-black text-white"
+                        : "border-zinc-300 text-zinc-600 hover:border-black hover:text-black"
+                    }`}
+                  >
+                    <Funnel size={15} weight="bold" />
+                    {selectedCats.size > 0 && !filterOpen && (
+                      <span className="absolute -right-1 -top-1 flex h-4 min-w-[16px] items-center justify-center rounded-full bg-amber-500 px-1 text-[10px] font-bold text-white">
+                        {selectedCats.size}
+                      </span>
+                    )}
+                  </button>
+                </div>
+
+                {filterOpen ? (
+                  <div className="rounded-md border border-zinc-200 bg-zinc-50 p-2">
+                    <div className="mb-2 flex items-center justify-between">
+                      <span className="text-[11px] font-semibold uppercase tracking-wide text-zinc-500">
+                        Filter by category
+                      </span>
+                      <div className="flex items-center gap-2">
+                        {selectedCats.size > 0 && (
+                          <button
+                            type="button"
+                            onClick={() => setSelectedCats(new Set())}
+                            className="text-xs text-zinc-500 underline hover:text-black"
+                          >
+                            Clear
+                          </button>
+                        )}
+                        <button
+                          type="button"
+                          onClick={() => setFilterOpen(false)}
+                          aria-label="Close filter"
+                          className="rounded p-0.5 text-zinc-500 hover:bg-zinc-200 hover:text-black"
+                        >
+                          <X size={14} weight="bold" />
+                        </button>
+                      </div>
+                    </div>
+                    <div className="flex flex-wrap gap-1.5">
+                      {allCategories.map((cat) => {
+                        const selected = selectedCats.has(cat);
+                        return (
+                          <button
+                            key={cat}
+                            type="button"
+                            onClick={() => toggleCategory(cat)}
+                            className={`rounded-full border px-2.5 py-1 text-xs font-medium transition-colors ${
+                              selected
+                                ? "border-black bg-black text-white"
+                                : "border-zinc-300 bg-white text-zinc-700 hover:border-black"
+                            }`}
+                          >
+                            {cat}
+                          </button>
+                        );
+                      })}
+                    </div>
+                  </div>
+                ) : (
+                  selectedCats.size > 0 && (
+                    <div className="flex flex-wrap gap-1.5">
+                      {Array.from(selectedCats).map((cat) => (
+                        <button
+                          key={cat}
+                          type="button"
+                          onClick={() => toggleCategory(cat)}
+                          className="inline-flex items-center gap-1 rounded-full border border-black bg-black py-0.5 pl-2.5 pr-1.5 text-xs font-medium text-white"
+                        >
+                          {cat}
+                          <X size={11} weight="bold" />
+                        </button>
+                      ))}
+                    </div>
+                  )
+                )}
+              </div>
+
+              <div className="px-2 pb-2">
+                {matches.length === 0 ? (
+                  <p className="px-3 py-8 text-center text-sm text-zinc-400">
+                    {norm
+                      ? `No matches for “${q.trim()}”.`
+                      : "Nothing in your catalog yet."}
+                  </p>
+                ) : (
+                  <>
+                    {matched.length > 0 && (
+                      <Section title={slot.name}>
+                        {matched.map((f) => (
+                          <FoodRow
+                            key={f.id}
+                            food={f}
+                            selected={selIds.has(f.id)}
+                            onClick={() => toggle(f)}
+                          />
+                        ))}
+                      </Section>
+                    )}
+                    {others.length > 0 && (
+                      <Section title="Others">
+                        {others.map((f) => (
+                          <FoodRow
+                            key={f.id}
+                            food={f}
+                            selected={selIds.has(f.id)}
+                            onClick={() => toggle(f)}
+                          />
+                        ))}
+                      </Section>
+                    )}
+                  </>
+                )}
+              </div>
+            </>
           )}
 
-          <div className="px-4 py-3">
-            <div className="relative">
-              <MagnifyingGlass
-                size={16}
-                className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-zinc-400"
-              />
-              <input
-                value={q}
-                onChange={(e) => setQ(e.target.value)}
-                placeholder="Search foods…"
-                className="input pl-9"
-              />
-            </div>
-          </div>
-
-          <div className="px-2 pb-2">
-            {matches.length === 0 ? (
-              <p className="px-3 py-8 text-center text-sm text-zinc-400">
-                {norm
-                  ? `No matches for “${q.trim()}”.`
-                  : "Nothing in your catalog yet."}
-              </p>
-            ) : (
-              <>
-                {matched.length > 0 && (
-                  <Section title={slot.name}>
-                    {matched.map((f) => (
-                      <FoodRow
-                        key={f.id}
-                        food={f}
-                        selected={selIds.has(f.id)}
-                        onClick={() => toggle(f)}
-                      />
-                    ))}
-                  </Section>
-                )}
-                {others.length > 0 && (
-                  <Section title="Others">
-                    {others.map((f) => (
-                      <FoodRow
-                        key={f.id}
-                        food={f}
-                        selected={selIds.has(f.id)}
-                        onClick={() => toggle(f)}
-                      />
-                    ))}
-                  </Section>
-                )}
-              </>
-            )}
-          </div>
+          <label className="block border-t border-zinc-100 px-4 py-3 text-sm">
+            <span className="text-zinc-600">Note</span>
+            <input
+              value={notesDraft}
+              onChange={(e) => setNotesDraft(e.target.value)}
+              onBlur={saveNotes}
+              placeholder="e.g. less spicy today"
+              className="input mt-1"
+            />
+          </label>
         </div>
 
         <div className="flex items-center justify-between gap-2 border-t border-zinc-200 p-3">
