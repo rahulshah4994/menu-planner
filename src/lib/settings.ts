@@ -31,16 +31,3 @@ export async function getSettings(): Promise<AppSettings> {
   return data as AppSettings;
 }
 
-export function noRepeatDaysForSlot(
-  settings: AppSettings,
-  slot: "Breakfast" | "Lunch" | "Dinner"
-): number {
-  switch (slot) {
-    case "Breakfast":
-      return settings.no_repeat_days_breakfast;
-    case "Lunch":
-      return settings.no_repeat_days_lunch;
-    case "Dinner":
-      return settings.no_repeat_days_dinner;
-  }
-}

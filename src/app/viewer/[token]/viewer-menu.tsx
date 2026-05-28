@@ -1,25 +1,24 @@
 "use client";
 import { useEffect, useState } from "react";
 import Link from "next/link";
-import { CaretLeft, CaretRight } from "@phosphor-icons/react/dist/ssr";
+import {
+  CaretLeft,
+  CaretRight,
+  ForkKnife,
+  NotePencil,
+  Rows,
+  SquaresFour,
+  Users,
+} from "@phosphor-icons/react/dist/ssr";
 import {
   addDays,
   formatISODate,
   formatWeekRangeLabel,
   parseISODate,
 } from "@/lib/dates";
-import { mealTypeColor } from "@/lib/meal-colors";
 
-type Slot = "Breakfast" | "Lunch" | "Dinner";
 type Lang = "hi" | "en" | "both";
-
-const SLOTS: Slot[] = ["Breakfast", "Lunch", "Dinner"];
-
-const SLOT_LABEL: Record<Slot, { hi: string; en: string }> = {
-  Breakfast: { hi: "नाश्ता", en: "Breakfast" },
-  Lunch: { hi: "दोपहर का खाना", en: "Lunch" },
-  Dinner: { hi: "रात का खाना", en: "Dinner" },
-};
+type Layout = "horizontal" | "vertical";
 
 const DAY_HINDI = [
   "रविवार",
@@ -37,42 +36,29 @@ const LANG_LABEL: Record<Lang, string> = {
   both: "दोनों · Both",
 };
 
-export interface ViewerPlan {
-  date: string;
-  slot: Slot;
+export interface ViewerFood {
+  id: string;
+  name: string;
+  name_hi: string;
+  ingredients: string;
+  ingredients_hi: string;
+  recipe_url: string | null;
+}
+
+export interface ViewerSlot {
+  id: number;
+  name: string;
+  color: string;
+  position: number;
+  people_eating: number | null;
+  notes: string;
   eating_out: boolean;
-  guests: number;
-  today_note: string | null;
-  meal_plan_meals?: {
-    position: number;
-    meal: {
-      id: string;
-      name_en: string;
-      name_hi: string;
-      meal_dishes?: {
-        position: number;
-        dish: {
-          id: string;
-          name_en: string;
-          name_hi: string;
-          ingredients: string;
-          ingredients_hi: string;
-          recipe_url: string | null;
-        };
-      }[];
-    };
-  }[];
-  meal_plan_addons?: {
-    dish: {
-      id: string;
-      name_en: string;
-      name_hi: string;
-      ingredients: string;
-      ingredients_hi: string;
-      recipe_url: string | null;
-      category: string;
-    };
-  }[];
+  foods: ViewerFood[];
+}
+
+export interface ViewerDay {
+  date: string;
+  slots: ViewerSlot[];
 }
 
 function dayLabel(iso: string, todayISO: string, tomorrowISO: string) {
@@ -93,39 +79,60 @@ function dayLabel(iso: string, todayISO: string, tomorrowISO: string) {
   return { hi, en, sub: `${enWeekday}, ${dd} ${mm}` };
 }
 
+function hexAlpha(hex: string, alpha: number) {
+  if (!/^#[0-9a-fA-F]{6}$/.test(hex)) return hex;
+  const r = parseInt(hex.slice(1, 3), 16);
+  const g = parseInt(hex.slice(3, 5), 16);
+  const b = parseInt(hex.slice(5, 7), 16);
+  return `rgba(${r}, ${g}, ${b}, ${alpha})`;
+}
+
 export function ViewerMenu({
   dates,
-  plans,
-  householdSize,
+  days,
   todayISO,
   token,
   prevStart,
   nextStart,
+  defaultPeople,
 }: {
   dates: string[];
-  plans: ViewerPlan[];
-  householdSize: number;
+  days: ViewerDay[];
   todayISO: string;
   token: string;
   prevStart: string;
   nextStart: string;
+  defaultPeople: number;
 }) {
   const [lang, setLang] = useState<Lang>("both");
+  const [layout, setLayout] = useState<Layout>("vertical");
 
-  // Remember the cook's choice on this device.
   useEffect(() => {
     const saved = localStorage.getItem("viewer-lang");
     if (saved === "hi" || saved === "en" || saved === "both") {
       // eslint-disable-next-line react-hooks/set-state-in-effect -- one-time hydration-safe read of the saved choice
       setLang(saved);
     }
+    const savedLayout = localStorage.getItem("viewer-layout");
+    // Phones default to vertical; larger screens default to horizontal.
+    const nextLayout: Layout =
+      savedLayout === "horizontal" || savedLayout === "vertical"
+        ? savedLayout
+        : typeof window !== "undefined" &&
+          window.matchMedia("(min-width: 768px)").matches
+        ? "horizontal"
+        : "vertical";
+    setLayout(nextLayout);
   }, []);
   useEffect(() => {
     localStorage.setItem("viewer-lang", lang);
   }, [lang]);
+  useEffect(() => {
+    localStorage.setItem("viewer-layout", layout);
+  }, [layout]);
 
-  const byKey = new Map<string, ViewerPlan>();
-  for (const p of plans) byKey.set(`${p.date}|${p.slot}`, p);
+  const byDate = new Map<string, ViewerDay>();
+  for (const d of days) byDate.set(d.date, d);
 
   const tomorrowISO = formatISODate(addDays(parseISODate(todayISO), 1));
   const isCurrent = dates[0] === todayISO;
@@ -147,7 +154,6 @@ export function ViewerMenu({
           {heading}
         </h1>
 
-        {/* Previous / range / next */}
         <div className="mt-3 flex max-w-sm items-center gap-2">
           <Link
             href={`/viewer/${token}?start=${prevStart}`}
@@ -178,36 +184,72 @@ export function ViewerMenu({
           </div>
         )}
 
-        {/* Language toggle */}
-        <div className="mt-4 inline-flex rounded-lg border border-zinc-300 p-0.5">
-          {(["hi", "en", "both"] as Lang[]).map((l) => (
+        <div className="mt-4 flex flex-wrap items-center gap-2">
+          <div className="inline-flex rounded-lg border border-zinc-300 p-0.5">
+            {(["hi", "en", "both"] as Lang[]).map((l) => (
+              <button
+                key={l}
+                type="button"
+                onClick={() => setLang(l)}
+                className={`rounded-md px-3 py-1.5 text-sm font-medium transition-colors ${
+                  lang === l
+                    ? "bg-black text-white"
+                    : "text-zinc-600 hover:text-black"
+                }`}
+              >
+                {LANG_LABEL[l]}
+              </button>
+            ))}
+          </div>
+          <div className="inline-flex rounded-lg border border-zinc-300 p-0.5">
             <button
-              key={l}
               type="button"
-              onClick={() => setLang(l)}
+              onClick={() => setLayout("vertical")}
+              aria-label="Stack days vertically"
               className={`rounded-md px-3 py-1.5 text-sm font-medium transition-colors ${
-                lang === l
+                layout === "vertical"
                   ? "bg-black text-white"
                   : "text-zinc-600 hover:text-black"
               }`}
             >
-              {LANG_LABEL[l]}
+              <Rows size={14} weight="bold" />
             </button>
-          ))}
+            <button
+              type="button"
+              onClick={() => setLayout("horizontal")}
+              aria-label="Scroll days horizontally"
+              className={`rounded-md px-3 py-1.5 text-sm font-medium transition-colors ${
+                layout === "horizontal"
+                  ? "bg-black text-white"
+                  : "text-zinc-600 hover:text-black"
+              }`}
+            >
+              <SquaresFour size={14} weight="bold" />
+            </button>
+          </div>
         </div>
       </header>
 
-      {/* Day-wise calendar columns — swipe sideways for more days. */}
-      <div className="flex snap-x snap-mandatory gap-2 overflow-x-auto p-1 pb-4">
+      <div
+        className={
+          layout === "horizontal"
+            ? "flex snap-x snap-mandatory gap-2 overflow-x-auto p-1 pb-4"
+            : "flex flex-col gap-3 p-1 pb-4"
+        }
+      >
         {dates.map((iso) => {
           const dl = dayLabel(iso, todayISO, tomorrowISO);
           const isToday = iso === todayISO;
+          const day = byDate.get(iso);
+          const slots = day?.slots ?? [];
           return (
             <section
               key={iso}
-              className={`flex w-72 shrink-0 snap-start flex-col rounded-xl p-3 ${
-                isToday ? "bg-emerald-50 ring-2 ring-emerald-400" : ""
-              }`}
+              className={`flex flex-col rounded-xl p-3 ${
+                layout === "horizontal"
+                  ? "w-72 shrink-0 snap-start"
+                  : "w-full"
+              } ${isToday ? "bg-emerald-50 ring-2 ring-emerald-400" : ""}`}
             >
               <h2
                 className={`text-2xl font-bold tracking-tight ${
@@ -221,18 +263,21 @@ export function ViewerMenu({
               )}
 
               <div className="mt-3 flex flex-col gap-3">
-                {SLOTS.map((slot) => {
-                  const p = byKey.get(`${iso}|${slot}`);
-                  return (
-                    <SlotBlock
-                      key={slot}
-                      slot={slot}
-                      plan={p}
-                      lang={lang}
-                      householdSize={householdSize}
-                    />
-                  );
-                })}
+                {slots.map((s) => (
+                  <SlotBlock
+                    key={s.id}
+                    slot={s}
+                    lang={lang}
+                    defaultPeople={defaultPeople}
+                  />
+                ))}
+                {slots.length === 0 && (
+                  <p className="text-sm text-zinc-400">
+                    {lang === "en"
+                      ? "— nothing planned —"
+                      : "— कुछ नहीं चुना —"}
+                  </p>
+                )}
               </div>
             </section>
           );
@@ -248,141 +293,95 @@ export function ViewerMenu({
 
 function SlotBlock({
   slot,
-  plan,
   lang,
-  householdSize,
+  defaultPeople,
 }: {
-  slot: Slot;
-  plan: ViewerPlan | undefined;
+  slot: ViewerSlot;
   lang: Lang;
-  householdSize: number;
+  defaultPeople: number;
 }) {
-  const label = SLOT_LABEL[slot];
-  const meals = (plan?.meal_plan_meals ?? []).sort(
-    (a, b) => a.position - b.position
-  );
-  const addons = plan?.meal_plan_addons ?? [];
-  const empty = !plan || (meals.length === 0 && !plan.eating_out);
-  const c = mealTypeColor(slot);
+  const bg = hexAlpha(slot.color, 0.18);
+  const border = hexAlpha(slot.color, 0.55);
+  const empty = slot.foods.length === 0;
+  const peopleCount = slot.people_eating ?? defaultPeople;
+  const peopleOverride =
+    slot.people_eating !== null && slot.people_eating !== defaultPeople;
 
   return (
-    <div className={`border p-4 ${c.bg} ${c.border}`}>
-      <div className="flex items-baseline justify-between">
-        <h3 className={`text-sm font-semibold ${c.heading}`}>
-          {lang === "en" ? label.en : label.hi}
-        </h3>
-        {lang === "both" && (
-          <span className="text-[11px] uppercase tracking-wider text-zinc-400">
-            {label.en}
+    <div
+      className="border p-4"
+      style={{ backgroundColor: bg, borderColor: border }}
+    >
+      <div className="flex items-center justify-between gap-2">
+        <h3 className="text-sm font-semibold text-zinc-800">{slot.name}</h3>
+        {!peopleOverride && (
+          <span
+            className="inline-flex items-center gap-1 rounded bg-white/60 px-2 py-0.5 text-xs font-medium text-zinc-700 ring-1 ring-zinc-300"
+            title={lang === "hi" ? "खाने वाले" : "People eating"}
+          >
+            <Users size={12} weight="bold" />
+            {peopleCount}
           </span>
         )}
       </div>
 
-      {empty ? (
-        <p className="mt-2 text-sm text-zinc-400">
+      {peopleOverride && (
+        <div className="mt-2 inline-flex items-center gap-1.5 rounded-md border-2 border-amber-500 bg-amber-100 px-2 py-1 text-sm font-semibold text-amber-900">
+          <Users size={15} weight="bold" />
           {lang === "en"
-            ? "— nothing planned —"
-            : "— कुछ नहीं चुना —"}
-        </p>
-      ) : plan!.eating_out ? (
-        <p className="mt-2 text-sm text-zinc-600">
-          🍽{" "}
+            ? `${slot.people_eating} eating (default ${defaultPeople})`
+            : lang === "hi"
+            ? `${slot.people_eating} खाने वाले (सामान्य ${defaultPeople})`
+            : `${slot.people_eating} खाने वाले · eating (default ${defaultPeople})`}
+        </div>
+      )}
+
+      {slot.eating_out ? (
+        <p className="mt-2 inline-flex items-center gap-1.5 rounded-md bg-amber-50 px-2 py-1 text-sm font-medium text-amber-900 ring-1 ring-amber-300">
+          <ForkKnife size={14} weight="bold" />
           {lang === "hi"
             ? "बाहर खाना"
             : lang === "en"
             ? "Eating out"
-            : "बाहर खाना (Eating out)"}
+            : "बाहर खाना · Eating out"}
+        </p>
+      ) : empty ? (
+        <p className="mt-2 text-sm text-zinc-400">
+          {lang === "en" ? "— nothing planned —" : "— कुछ नहीं चुना —"}
         </p>
       ) : (
         <div className="mt-3 space-y-3">
-          {meals.map((mm) => (
-            <div
-              key={mm.meal.id}
-              className="border-l-2 border-black pl-3"
-            >
-              <Bilingual
-                hi={mm.meal.name_hi}
-                en={mm.meal.name_en}
-                lang={lang}
-                primaryClass="text-base font-medium text-black"
-                secondaryClass="text-xs text-zinc-500"
-              />
-              {(mm.meal.meal_dishes ?? [])
-                .sort((a, b) => a.position - b.position)
-                .map((md) => (
-                  <DishLine key={md.dish.id} dish={md.dish} lang={lang} />
-                ))}
-            </div>
+          {slot.foods.map((f) => (
+            <FoodLine key={f.id} food={f} lang={lang} />
           ))}
         </div>
       )}
 
-      {plan && !plan.eating_out && addons.length > 0 && (
-        <div className="mt-3 border-t border-zinc-100 pt-3">
-          <p className="text-[11px] uppercase tracking-wider text-zinc-400">
-            {lang === "en" ? "Sides & extras" : "साथ में"}
-          </p>
-          <ul className="mt-1 space-y-1 text-sm">
-            {addons.map((a) => (
-              <li key={a.dish.id}>
-                <Bilingual
-                  hi={a.dish.name_hi}
-                  en={a.dish.name_en}
-                  lang={lang}
-                  inline
-                  primaryClass="font-medium text-zinc-800"
-                  secondaryClass="text-xs text-zinc-400"
-                />
-              </li>
-            ))}
-          </ul>
-        </div>
-      )}
-
-      {plan && (plan.guests > 0 || plan.today_note) && (
-        <div className="mt-3 border-t border-zinc-100 pt-3 text-sm">
-          {plan.guests > 0 && (
-            <p className="text-zinc-700">
-              👥 {householdSize} + {plan.guests}{" "}
-              {lang === "en" ? "guests" : "मेहमान"}
-            </p>
-          )}
-          {plan.today_note && (
-            <p className="mt-1 rounded border border-amber-300 bg-amber-50 px-2 py-1 text-zinc-800">
-              📝 {plan.today_note}
-            </p>
-          )}
-        </div>
+      {slot.notes && (
+        <p className="mt-3 flex items-start gap-1.5 rounded-md border border-amber-300 bg-amber-50 px-2 py-1.5 text-sm text-zinc-800">
+          <NotePencil
+            size={14}
+            weight="bold"
+            className="mt-0.5 shrink-0 text-amber-700"
+          />
+          <span>{slot.notes}</span>
+        </p>
       )}
     </div>
   );
 }
 
-function DishLine({
-  dish,
-  lang,
-}: {
-  dish: {
-    name_en: string;
-    name_hi: string;
-    ingredients: string;
-    ingredients_hi: string;
-    recipe_url: string | null;
-  };
-  lang: Lang;
-}) {
-  const ingHi = dish.ingredients_hi || dish.ingredients;
-  const ingEn = dish.ingredients || dish.ingredients_hi;
-  const showBothIng =
-    lang === "both" && ingHi && ingEn && ingHi !== ingEn;
+function FoodLine({ food, lang }: { food: ViewerFood; lang: Lang }) {
+  const ingHi = food.ingredients_hi || food.ingredients;
+  const ingEn = food.ingredients || food.ingredients_hi;
+  const showBothIng = lang === "both" && ingHi && ingEn && ingHi !== ingEn;
 
   return (
-    <div className="mt-2 text-sm">
+    <div className="text-sm">
       <p className="font-medium text-zinc-800">
-        •{" "}
-        {lang === "en" ? dish.name_en : dish.name_hi}
-        {lang === "both" && (
-          <span className="text-xs text-zinc-400"> ({dish.name_en})</span>
+        • {lang === "en" ? food.name : food.name_hi || food.name}
+        {lang === "both" && food.name && food.name_hi && (
+          <span className="text-xs text-zinc-400"> ({food.name})</span>
         )}
       </p>
       {(lang === "en" ? ingEn : ingHi) && (
@@ -393,9 +392,9 @@ function DishLine({
       {showBothIng && (
         <p className="ml-3 text-xs text-zinc-400">{ingEn}</p>
       )}
-      {dish.recipe_url && (
+      {food.recipe_url && (
         <a
-          href={dish.recipe_url}
+          href={food.recipe_url}
           target="_blank"
           rel="noreferrer"
           className="ml-3 text-xs text-black underline"
@@ -404,38 +403,5 @@ function DishLine({
         </a>
       )}
     </div>
-  );
-}
-
-function Bilingual({
-  hi,
-  en,
-  lang,
-  primaryClass,
-  secondaryClass,
-  inline,
-}: {
-  hi: string;
-  en: string;
-  lang: Lang;
-  primaryClass: string;
-  secondaryClass: string;
-  inline?: boolean;
-}) {
-  if (lang === "hi") return <p className={primaryClass}>{hi}</p>;
-  if (lang === "en") return <p className={primaryClass}>{en}</p>;
-  if (inline) {
-    return (
-      <span>
-        <span className={primaryClass}>{hi}</span>
-        <span className={`ml-1 ${secondaryClass}`}>({en})</span>
-      </span>
-    );
-  }
-  return (
-    <>
-      <p className={primaryClass}>{hi}</p>
-      <p className={secondaryClass}>{en}</p>
-    </>
   );
 }

@@ -2,11 +2,13 @@ import { notFound } from "next/navigation";
 import { createServiceClient } from "@/lib/supabase/server";
 import { getSettings } from "@/lib/settings";
 import { addDays, formatISODate, parseISODate, rangeDays } from "@/lib/dates";
-import { ViewerMenu, type ViewerPlan } from "./viewer-menu";
+import { dayPlanId, slotId } from "@/lib/v2/ids";
+import type { DaySlot, SlotTemplate } from "@/lib/v2/types";
+import { ViewerMenu, type ViewerDay, type ViewerFood } from "./viewer-menu";
 
 export const dynamic = "force-dynamic";
 
-export default async function ViewerPage({
+export default async function V2ViewerPage({
   params,
   searchParams,
 }: {
@@ -16,17 +18,15 @@ export default async function ViewerPage({
   const { token } = await params;
   const { start } = await searchParams;
 
-  // Validate token with service client (bypasses RLS)
   const supabase = createServiceClient();
-  const { data: tokenRow } = await supabase
+  const { data: tok } = await supabase
     .from("cook_tokens")
     .select("token, revoked")
     .eq("token", token)
     .maybeSingle();
-  if (!tokenRow || tokenRow.revoked) notFound();
+  if (!tok || tok.revoked) notFound();
 
   const settings = await getSettings().catch(async () => {
-    // settings table is RLS-protected; fall back via service client
     const { data } = await supabase
       .from("settings")
       .select("*")
@@ -35,56 +35,101 @@ export default async function ViewerPage({
     return data!;
   });
 
-  const days = settings.viewer_horizon_days ?? 3;
+  const horizon = settings.viewer_horizon_days ?? 3;
   const today = new Date();
   today.setHours(0, 0, 0, 0);
   const todayISO = formatISODate(today);
 
-  // `start` lets the cook page through past/future windows.
   const validStart =
     start && /^\d{4}-\d{2}-\d{2}$/.test(start) ? start : undefined;
   const base = validStart ? parseISODate(validStart) : today;
+  const dates = rangeDays(base, horizon).map((d) => formatISODate(d));
+  const prevStart = formatISODate(addDays(base, -horizon));
+  const nextStart = formatISODate(addDays(base, horizon));
 
-  const startISO = formatISODate(base);
-  const endISO = formatISODate(addDays(base, days));
+  const planIds = dates.map((d) => dayPlanId(d));
 
-  const { data: plansData } = await supabase
-    .from("meal_plans")
-    .select(
-      `id, date, slot, eating_out, guests, today_note,
-       meal_plan_meals (
-         meal_id, position,
-         meal:meals (
-           id, name_en, name_hi,
-           meal_dishes (
-             position,
-             dish:dishes (id, name_en, name_hi, ingredients, ingredients_hi, recipe_url)
-           )
-         )
-       ),
-       meal_plan_addons (
-         dish_id,
-         dish:dishes (id, name_en, name_hi, ingredients, ingredients_hi, recipe_url, category)
-       )`
-    )
-    .gte("date", startISO)
-    .lt("date", endISO)
-    .order("date", { ascending: true });
+  const [{ data: slotData }, { data: tplData }] = await Promise.all([
+    supabase
+      .from("day_slots")
+      .select("*")
+      .in("day_plan_id", planIds)
+      .order("position"),
+    supabase.from("slot_templates").select("*").order("position"),
+  ]);
 
-  const plans = (plansData ?? []) as unknown as ViewerPlan[];
-  const dates = rangeDays(base, days).map((d) => formatISODate(d));
-  const prevStart = formatISODate(addDays(base, -days));
-  const nextStart = formatISODate(addDays(base, days));
+  const slotsByPlan = new Map<number, DaySlot[]>();
+  for (const s of (slotData ?? []) as DaySlot[]) {
+    const arr = slotsByPlan.get(s.day_plan_id) ?? [];
+    arr.push(s);
+    slotsByPlan.set(s.day_plan_id, arr);
+  }
+
+  const allSlotIds = ((slotData ?? []) as DaySlot[]).map((s) => s.id);
+  const foodsBySlot = new Map<number, ViewerFood[]>();
+  if (allSlotIds.length) {
+    const { data: sf } = await supabase
+      .from("day_slot_foods")
+      .select(
+        "day_slot_id, position, food:foods(id,name,name_hi,ingredients,ingredients_hi,recipe_url)"
+      )
+      .in("day_slot_id", allSlotIds)
+      .order("position");
+    for (const r of (sf ?? []) as unknown as {
+      day_slot_id: number;
+      food: ViewerFood | null;
+    }[]) {
+      if (!r.food) continue;
+      const arr = foodsBySlot.get(r.day_slot_id) ?? [];
+      arr.push(r.food);
+      foodsBySlot.set(r.day_slot_id, arr);
+    }
+  }
+
+  const templates = (tplData ?? []) as SlotTemplate[];
+
+  const days: ViewerDay[] = dates.map((date) => {
+    const id = dayPlanId(date);
+    const planned = slotsByPlan.get(id);
+    if (planned && planned.length) {
+      return {
+        date,
+        slots: planned.map((s) => ({
+          id: s.id,
+          name: s.name,
+          color: s.color,
+          position: s.position,
+          people_eating: s.people_eating,
+          notes: s.notes,
+          eating_out: s.eating_out,
+          foods: foodsBySlot.get(s.id) ?? [],
+        })),
+      };
+    }
+    return {
+      date,
+      slots: templates.map((t, i) => ({
+        id: slotId(id, i + 1),
+        name: t.name,
+        color: t.color,
+        position: i + 1,
+        people_eating: null,
+        notes: "",
+        eating_out: false,
+        foods: [],
+      })),
+    };
+  });
 
   return (
     <ViewerMenu
       dates={dates}
-      plans={plans}
-      householdSize={settings.household_size}
+      days={days}
       todayISO={todayISO}
       token={token}
       prevStart={prevStart}
       nextStart={nextStart}
+      defaultPeople={settings.household_size}
     />
   );
 }

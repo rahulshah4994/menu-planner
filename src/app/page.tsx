@@ -28,7 +28,7 @@ export default async function Home() {
   } = await supabase.auth.getUser();
 
   // Logged in → straight into the app
-  if (user) redirect("/v2/planner");
+  if (user) redirect("/planner");
 
   // Logged out → login page
   redirect("/login");
