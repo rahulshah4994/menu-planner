@@ -2,6 +2,7 @@ import Link from "next/link";
 import { createClient } from "@/lib/supabase/server";
 import type { Food } from "@/lib/v2/types";
 import { deleteFood } from "./actions";
+import { CategoryCell } from "./category-cell";
 
 export default async function FoodsPage() {
   const supabase = await createClient();
@@ -24,8 +25,8 @@ export default async function FoodsPage() {
         </Link>
       </header>
 
-      <div className="table-shell">
-        <table className="table-base">
+      <div className="table-shell overflow-x-auto">
+        <table className="table-base min-w-[40rem]">
           <thead>
             <tr>
               <th className="th-base">Name</th>
@@ -41,13 +42,7 @@ export default async function FoodsPage() {
                 <td className="td-base font-medium text-black">{f.name}</td>
                 <td className="td-base text-zinc-700">{f.name_hi}</td>
                 <td className="td-base">
-                  <div className="flex flex-wrap gap-1">
-                    {f.categories?.map((c) => (
-                      <span key={c} className="tag-soft">
-                        {c}
-                      </span>
-                    ))}
-                  </div>
+                  <CategoryCell categories={f.categories ?? []} />
                 </td>
                 <td className="td-base text-zinc-500">
                   {f.active ? "Active" : "Archived"}
