@@ -46,6 +46,14 @@ body {
     color: var(--color-zinc-400);
   }
 }
+@utility input {
+  &:disabled {
+    background: var(--color-zinc-100);
+    color: var(--color-zinc-400);
+    border-color: var(--color-zinc-200);
+    cursor: not-allowed;
+  }
+}
 
 /* ---------- buttons ---------- */
 @utility btn {

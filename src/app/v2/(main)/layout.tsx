@@ -1,9 +1,7 @@
 import Link from "next/link";
-import { SignOut } from "@phosphor-icons/react/dist/ssr";
 import { requireFamily } from "@/lib/auth";
-import { BottomNav } from "./bottom-nav";
 
-export default async function AppLayout({
+export default async function V2Layout({
   children,
 }: {
   children: React.ReactNode;
@@ -15,65 +13,48 @@ export default async function AppLayout({
         <div className="mx-auto flex max-w-6xl items-center justify-between px-4 py-4 sm:px-6">
           <div className="flex items-center gap-3">
             <Link
-              href="/"
+              href="/v2/planner"
               className="text-base font-semibold tracking-tight text-black"
             >
               Menu Planner
             </Link>
             <div className="inline-flex rounded-full border border-zinc-200 p-0.5 text-[11px] font-medium">
-              <span className="rounded-full bg-black px-2 py-0.5 text-white">
-                v1
-              </span>
               <Link
-                href="/v2/planner"
+                href="/planner"
                 className="rounded-full px-2 py-0.5 text-zinc-500 hover:text-black"
               >
-                v2
+                v1
               </Link>
+              <span className="rounded-full bg-black px-2 py-0.5 text-white">
+                v2
+              </span>
             </div>
           </div>
-          <div className="flex items-center gap-6 text-sm">
-            <div className="hidden items-center gap-6 sm:flex">
+          <div className="flex items-center gap-5 text-sm">
             <Link
-              href="/dishes"
-              className="font-medium text-zinc-700 hover:text-black"
-            >
-              Dishes
-            </Link>
-            <Link
-              href="/meals"
-              className="font-medium text-zinc-700 hover:text-black"
-            >
-              Meals
-            </Link>
-            <Link
-              href="/planner"
+              href="/v2/planner"
               className="font-medium text-zinc-700 hover:text-black"
             >
               Planner
             </Link>
             <Link
-              href="/settings"
+              href="/v2/foods"
+              className="font-medium text-zinc-700 hover:text-black"
+            >
+              Foods
+            </Link>
+            <Link
+              href="/v2/settings"
               className="font-medium text-zinc-700 hover:text-black"
             >
               Settings
             </Link>
-            </div>
-            <form action="/logout" method="POST">
-              <button
-                aria-label="Sign out"
-                className="flex items-center gap-1 text-zinc-500 hover:text-black"
-              >
-                <SignOut size={16} weight="bold" />
-              </button>
-            </form>
           </div>
         </div>
       </nav>
-      <div className="mx-auto max-w-6xl px-4 py-6 pb-24 sm:px-6 sm:py-10 sm:pb-10">
+      <div className="mx-auto max-w-6xl px-4 py-6 sm:px-6 sm:py-10">
         {children}
       </div>
-      <BottomNav />
     </div>
   );
 }
