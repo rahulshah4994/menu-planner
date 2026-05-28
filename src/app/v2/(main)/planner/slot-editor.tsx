@@ -1,17 +1,12 @@
 "use client";
-import {
-  startTransition,
-  useEffect,
-  useMemo,
-  useOptimistic,
-  useState,
-} from "react";
+import { startTransition, useEffect, useMemo, useState } from "react";
 import {
   X,
   MagnifyingGlass,
   Check,
   Funnel,
   ForkKnife,
+  NotePencil,
   Plus,
   Trash,
 } from "@phosphor-icons/react/dist/ssr";
@@ -19,32 +14,12 @@ import { formatDayLabel, parseISODate } from "@/lib/dates";
 import { mergeCategories } from "@/lib/v2/categories";
 import type { FoodLite, SlotWithFoods } from "@/lib/v2/types";
 import {
-  addFood,
   addSlot,
   deleteSlot,
   moveSlot,
-  recolorSlot,
-  removeFood,
-  renameSlot,
-  setPeopleEating,
-  setSlotEatingOut,
-  setSlotNotes,
+  saveSlot,
 } from "./actions";
 import { SlotNameModal } from "./slot-name-modal";
-
-type Action =
-  | { type: "ADD_FOOD"; food: FoodLite }
-  | { type: "REMOVE_FOOD"; id: string };
-
-function reduce(state: FoodLite[], action: Action): FoodLite[] {
-  switch (action.type) {
-    case "ADD_FOOD":
-      if (state.some((f) => f.id === action.food.id)) return state;
-      return [...state, action.food];
-    case "REMOVE_FOOD":
-      return state.filter((f) => f.id !== action.id);
-  }
-}
 
 function hexAlpha(hex: string, alpha: number) {
   if (!/^#[0-9a-fA-F]{6}$/.test(hex)) return hex;
@@ -71,16 +46,26 @@ export function SlotEditor({
   defaultPeople: number;
   onClose: () => void;
 }) {
-  const [opt, dispatch] = useOptimistic(slot.foods, reduce);
+  // Local draft state — initialized from the slot prop once. Nothing here is
+  // sent to the server until the user clicks Done; closing via X discards it.
+  const [draftFoods, setDraftFoods] = useState<FoodLite[]>(slot.foods);
+  const [draftPeople, setDraftPeople] = useState<number | null>(
+    slot.people_eating
+  );
+  const [draftName, setDraftName] = useState(slot.name);
+  const [draftColor, setDraftColor] = useState(slot.color);
+  const [draftNotes, setDraftNotes] = useState(slot.notes ?? "");
+  const [draftEatingOut, setDraftEatingOut] = useState(slot.eating_out);
+
   const [q, setQ] = useState("");
-  const [nameDraft, setNameDraft] = useState(slot.name);
   const [addingSlot, setAddingSlot] = useState(false);
-  const [notesDraft, setNotesDraft] = useState(slot.notes ?? "");
+  const [notesOpen, setNotesOpen] = useState(!!slot.notes);
   const [filterOpen, setFilterOpen] = useState(false);
   const [selectedCats, setSelectedCats] = useState<Set<string>>(new Set());
-  const peopleValue = slot.people_eating ?? defaultPeople;
-  const isOverride =
-    slot.people_eating !== null && slot.people_eating !== defaultPeople;
+  const [saving, setSaving] = useState(false);
+
+  const peopleValue = draftPeople ?? defaultPeople;
+  const isOverride = draftPeople !== null && draftPeople !== defaultPeople;
 
   const allCategories = useMemo(
     () => mergeCategories(allFoods.flatMap((f) => f.categories ?? [])),
@@ -108,39 +93,52 @@ export function SlotEditor({
     };
   }, [onClose]);
 
-  const selIds = new Set(opt.map((f) => f.id));
-  const bg = hexAlpha(slot.color, 0.18);
+  const selIds = new Set(draftFoods.map((f) => f.id));
+  const bg = hexAlpha(draftColor, 0.18);
   const headingColor = "text-zinc-800";
 
   function toggle(food: FoodLite) {
+    setDraftFoods((prev) =>
+      prev.some((f) => f.id === food.id)
+        ? prev.filter((f) => f.id !== food.id)
+        : [...prev, food]
+    );
+  }
+
+  async function commitDraft() {
+    await saveSlot(slot.id, {
+      name: draftName,
+      color: draftColor,
+      people_eating: draftPeople,
+      notes: draftNotes,
+      eating_out: draftEatingOut,
+      foodIds: draftFoods.map((f) => f.id),
+    });
+  }
+
+  function onDone() {
+    if (saving) return;
+    setSaving(true);
     startTransition(async () => {
-      if (selIds.has(food.id)) {
-        dispatch({ type: "REMOVE_FOOD", id: food.id });
-        await removeFood(slot.id, food.id);
-      } else {
-        dispatch({ type: "ADD_FOOD", food });
-        await addFood(slot.id, food.id);
+      try {
+        await commitDraft();
+        onClose();
+      } finally {
+        setSaving(false);
       }
     });
   }
 
-  function saveName() {
-    const v = nameDraft.trim();
-    if (!v || v === slot.name) return;
-    startTransition(async () => {
-      await renameSlot(slot.id, v);
-    });
-  }
-
-  function onRecolor(color: string) {
-    startTransition(async () => {
-      await recolorSlot(slot.id, color);
-    });
-  }
-
   function onMove(dir: number) {
+    if (saving) return;
+    setSaving(true);
     startTransition(async () => {
-      await moveSlot(dayPlanId, slot.id, dir);
+      try {
+        await commitDraft();
+        await moveSlot(dayPlanId, slot.id, dir);
+      } finally {
+        setSaving(false);
+      }
     });
   }
 
@@ -157,30 +155,11 @@ export function SlotEditor({
   }
 
   function onPeopleChange(next: number) {
-    const clamped = Math.max(0, Math.min(50, next));
-    startTransition(async () => {
-      await setPeopleEating(slot.id, clamped);
-    });
+    setDraftPeople(Math.max(0, Math.min(50, next)));
   }
 
   function onResetPeople() {
-    startTransition(async () => {
-      await setPeopleEating(slot.id, null);
-    });
-  }
-
-  function saveNotes() {
-    const v = notesDraft.trim();
-    if (v === (slot.notes ?? "")) return;
-    startTransition(async () => {
-      await setSlotNotes(slot.id, v);
-    });
-  }
-
-  function onEatingOut(value: boolean) {
-    startTransition(async () => {
-      await setSlotEatingOut(slot.id, value);
-    });
+    setDraftPeople(null);
   }
 
   const idx = allSlots.findIndex((s) => s.id === slot.id);
@@ -202,7 +181,7 @@ export function SlotEditor({
       selectedCatsLower.has(c.trim().toLowerCase())
     );
   });
-  const slotKey = slot.name.trim().toLowerCase();
+  const slotKey = draftName.trim().toLowerCase();
   const matched = matches.filter((f) =>
     (f.categories ?? []).some((c) => c.trim().toLowerCase() === slotKey)
   );
@@ -227,9 +206,8 @@ export function SlotEditor({
         >
           <div className="min-w-0 flex-1">
             <input
-              value={nameDraft}
-              onChange={(e) => setNameDraft(e.target.value)}
-              onBlur={saveName}
+              value={draftName}
+              onChange={(e) => setDraftName(e.target.value)}
               className={`w-full bg-transparent text-sm font-semibold uppercase tracking-wide outline-none ${headingColor}`}
             />
             <p className="mt-0.5 text-xs text-zinc-500">
@@ -238,8 +216,8 @@ export function SlotEditor({
             <div className="mt-2 flex items-center gap-1.5">
               <input
                 type="color"
-                defaultValue={slot.color}
-                onChange={(e) => onRecolor(e.target.value)}
+                value={draftColor}
+                onChange={(e) => setDraftColor(e.target.value)}
                 aria-label="Slot colour"
                 className="h-6 w-6 cursor-pointer rounded border-0 bg-transparent p-0"
               />
@@ -285,8 +263,8 @@ export function SlotEditor({
             <label className="flex items-center gap-2">
               <input
                 type="checkbox"
-                checked={slot.eating_out}
-                onChange={(e) => onEatingOut(e.target.checked)}
+                checked={draftEatingOut}
+                onChange={(e) => setDraftEatingOut(e.target.checked)}
               />
               <ForkKnife size={14} weight="bold" className="text-zinc-500" />
               <span>Eating out</span>
@@ -338,23 +316,58 @@ export function SlotEditor({
             </div>
           </div>
 
-          {!slot.eating_out && (
-            <>
-              {opt.length > 0 && (
-                <div className="flex flex-wrap gap-2 border-b border-zinc-100 px-4 py-3">
-                  {opt.map((f) => (
-                    <button
-                      key={f.id}
-                      type="button"
-                      onClick={() => toggle(f)}
-                      className="inline-flex items-center gap-1.5 rounded-md bg-black py-1.5 pl-3 pr-2 text-sm font-semibold text-white"
-                    >
-                      {f.name}
-                      <X size={14} weight="bold" />
-                    </button>
-                  ))}
-                </div>
+          <div className="border-b border-zinc-100 px-4 py-3">
+            <div className="flex flex-wrap items-center gap-2">
+              {draftEatingOut ? (
+                <span className="inline-flex items-center gap-1 rounded bg-amber-100 px-2 py-0.5 text-xs font-medium text-amber-900 ring-1 ring-amber-300">
+                  <ForkKnife size={12} weight="bold" />
+                  Eating out
+                </span>
+              ) : draftFoods.length > 0 ? (
+                draftFoods.map((f) => (
+                  <button
+                    key={f.id}
+                    type="button"
+                    onClick={() => toggle(f)}
+                    className="inline-flex items-center gap-1.5 rounded-md bg-black py-1.5 pl-3 pr-2 text-sm font-semibold text-white"
+                  >
+                    {f.name}
+                    <X size={14} weight="bold" />
+                  </button>
+                ))
+              ) : (
+                <span className="text-xs italic text-zinc-400">
+                  No foods picked yet
+                </span>
               )}
+              <button
+                type="button"
+                onClick={() => setNotesOpen((v) => !v)}
+                aria-expanded={notesOpen}
+                aria-label={notesOpen ? "Hide note" : "Add note"}
+                className={`ml-auto inline-flex items-center gap-1 rounded-md border px-2 py-1 text-xs font-medium transition-colors ${
+                  draftNotes
+                    ? "border-amber-500 bg-amber-50 text-amber-900"
+                    : "border-zinc-300 text-zinc-600 hover:border-black hover:text-black"
+                }`}
+              >
+                <NotePencil size={13} weight="bold" />
+                Note
+              </button>
+            </div>
+            {notesOpen && (
+              <input
+                value={draftNotes}
+                onChange={(e) => setDraftNotes(e.target.value)}
+                placeholder="e.g. less spicy today"
+                className="input mt-2"
+                autoFocus
+              />
+            )}
+          </div>
+
+          {!draftEatingOut && (
+            <>
 
               <div className="space-y-2 px-4 py-3">
                 <div className="flex items-center gap-2">
@@ -465,7 +478,7 @@ export function SlotEditor({
                 ) : (
                   <>
                     {matched.length > 0 && (
-                      <Section title={slot.name}>
+                      <Section title={draftName || slot.name}>
                         {matched.map((f) => (
                           <FoodRow
                             key={f.id}
@@ -494,16 +507,6 @@ export function SlotEditor({
             </>
           )}
 
-          <label className="block border-t border-zinc-100 px-4 py-3 text-sm">
-            <span className="text-zinc-600">Note</span>
-            <input
-              value={notesDraft}
-              onChange={(e) => setNotesDraft(e.target.value)}
-              onBlur={saveNotes}
-              placeholder="e.g. less spicy today"
-              className="input mt-1"
-            />
-          </label>
         </div>
 
         <div className="flex items-center justify-between gap-2 border-t border-zinc-200 p-3">
@@ -517,10 +520,11 @@ export function SlotEditor({
           </button>
           <button
             type="button"
-            onClick={onClose}
-            className="btn btn-primary"
+            onClick={onDone}
+            disabled={saving}
+            className="btn btn-primary disabled:opacity-60"
           >
-            Done
+            {saving ? "Saving…" : "Done"}
           </button>
         </div>
       </div>
@@ -532,8 +536,14 @@ export function SlotEditor({
           onCancel={() => setAddingSlot(false)}
           onConfirm={(name) => {
             setAddingSlot(false);
+            setSaving(true);
             startTransition(async () => {
-              await addSlot(dayPlanId, name);
+              try {
+                await commitDraft();
+                await addSlot(dayPlanId, name);
+              } finally {
+                setSaving(false);
+              }
             });
           }}
         />

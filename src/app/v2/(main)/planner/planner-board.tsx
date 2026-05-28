@@ -289,6 +289,7 @@ function SlotCell({
   const bg = hexAlpha(slot.color, 0.18);
   const border = hexAlpha(slot.color, 0.55);
   const isEmpty = slot.foods.length === 0;
+  const peopleCount = slot.people_eating ?? defaultPeople;
   const peopleOverride =
     slot.people_eating !== null && slot.people_eating !== defaultPeople;
 
@@ -322,28 +323,32 @@ function SlotCell({
           </div>
         )}
       </div>
-      {(peopleOverride || slot.notes) && (
-        <div className="mt-1.5 flex flex-wrap items-center gap-1">
-          {peopleOverride && (
-            <span
-              className="inline-flex items-center gap-0.5 rounded bg-amber-100 px-1.5 py-0.5 text-[10px] font-semibold text-amber-900 ring-1 ring-amber-400"
-              title={`Default is ${defaultPeople}`}
-            >
-              <Users size={11} weight="bold" />
-              {slot.people_eating}
-            </span>
-          )}
-          {slot.notes && (
-            <span
-              className="inline-flex max-w-full items-center gap-0.5 truncate rounded bg-amber-100 px-1.5 py-0.5 text-[10px] font-medium text-amber-900 ring-1 ring-amber-300"
-              title={slot.notes}
-            >
-              <NotePencil size={11} weight="bold" />
-              <span className="truncate">{slot.notes}</span>
-            </span>
-          )}
-        </div>
-      )}
+      <div className="mt-1.5 flex flex-wrap items-center gap-1">
+        <span
+          className={`inline-flex items-center gap-0.5 rounded px-1.5 py-0.5 text-[10px] font-semibold ${
+            peopleOverride
+              ? "bg-amber-100 text-amber-900 ring-1 ring-amber-400"
+              : "bg-white/70 text-zinc-600 ring-1 ring-zinc-300"
+          }`}
+          title={
+            peopleOverride
+              ? `${peopleCount} eating (default ${defaultPeople})`
+              : `${peopleCount} eating`
+          }
+        >
+          <Users size={11} weight="bold" />
+          {peopleCount}
+        </span>
+        {slot.notes && (
+          <span
+            className="inline-flex max-w-full items-center gap-0.5 truncate rounded bg-amber-100 px-1.5 py-0.5 text-[10px] font-medium text-amber-900 ring-1 ring-amber-300"
+            title={slot.notes}
+          >
+            <NotePencil size={11} weight="bold" />
+            <span className="truncate">{slot.notes}</span>
+          </span>
+        )}
+      </div>
     </button>
   );
 }

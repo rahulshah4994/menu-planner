@@ -72,6 +72,51 @@ export async function setSlotEatingOut(id: number, eating_out: boolean) {
   revalidatePath(PLANNER);
 }
 
+/** Batched commit of every editable field on a slot — used by the slot editor's
+ *  "Done" button so the modal's edits land atomically rather than one per
+ *  keystroke / toggle. Food set is replaced wholesale. */
+export async function saveSlot(
+  id: number,
+  data: {
+    name: string;
+    color: string;
+    people_eating: number | null;
+    notes: string;
+    eating_out: boolean;
+    foodIds: string[];
+  }
+) {
+  const supabase = await createClient();
+  const people =
+    data.people_eating === null
+      ? null
+      : Math.max(0, Math.min(50, Math.floor(data.people_eating)));
+  const { error: updateErr } = await supabase
+    .from("day_slots")
+    .update({
+      name: data.name.trim() || "Untitled",
+      color: data.color,
+      people_eating: people,
+      notes: data.notes.trim(),
+      eating_out: data.eating_out,
+    })
+    .eq("id", id);
+  if (updateErr) throw updateErr;
+
+  await supabase.from("day_slot_foods").delete().eq("day_slot_id", id);
+  if (data.foodIds.length) {
+    const { error: insertErr } = await supabase.from("day_slot_foods").insert(
+      data.foodIds.map((food_id, position) => ({
+        day_slot_id: id,
+        food_id,
+        position,
+      }))
+    );
+    if (insertErr) throw insertErr;
+  }
+  revalidatePath(PLANNER);
+}
+
 export async function deleteSlot(id: number) {
   const supabase = await createClient();
   await supabase.from("day_slots").delete().eq("id", id);

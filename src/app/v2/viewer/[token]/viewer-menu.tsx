@@ -303,6 +303,7 @@ function SlotBlock({
   const bg = hexAlpha(slot.color, 0.18);
   const border = hexAlpha(slot.color, 0.55);
   const empty = slot.foods.length === 0;
+  const peopleCount = slot.people_eating ?? defaultPeople;
   const peopleOverride =
     slot.people_eating !== null && slot.people_eating !== defaultPeople;
 
@@ -311,8 +312,17 @@ function SlotBlock({
       className="border p-4"
       style={{ backgroundColor: bg, borderColor: border }}
     >
-      <div className="flex items-baseline justify-between">
+      <div className="flex items-center justify-between gap-2">
         <h3 className="text-sm font-semibold text-zinc-800">{slot.name}</h3>
+        {!peopleOverride && (
+          <span
+            className="inline-flex items-center gap-1 rounded bg-white/60 px-2 py-0.5 text-xs font-medium text-zinc-700 ring-1 ring-zinc-300"
+            title={lang === "hi" ? "खाने वाले" : "People eating"}
+          >
+            <Users size={12} weight="bold" />
+            {peopleCount}
+          </span>
+        )}
       </div>
 
       {peopleOverride && (
