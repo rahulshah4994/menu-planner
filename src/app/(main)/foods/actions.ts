@@ -57,11 +57,21 @@ export async function updateFood(id: string, fd: FormData) {
   redirect("/foods");
 }
 
-export async function deleteFood(id: string) {
+export async function archiveFood(id: string) {
   const supabase = await createClient();
   const { error } = await supabase
     .from("foods")
     .update({ active: false })
+    .eq("id", id);
+  if (error) throw error;
+  revalidatePath("/foods");
+}
+
+export async function unarchiveFood(id: string) {
+  const supabase = await createClient();
+  const { error } = await supabase
+    .from("foods")
+    .update({ active: true })
     .eq("id", id);
   if (error) throw error;
   revalidatePath("/foods");
