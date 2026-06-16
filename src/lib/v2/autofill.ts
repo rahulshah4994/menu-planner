@@ -70,7 +70,19 @@ export async function autofillFoodHindi(input: {
     `Ingredients (Hindi, user-provided): ${input.ingredients_hi || "(none)"}`,
   ].join("\n");
 
-  const result = await model.generateContent(parts);
+  let result;
+  for (let attempt = 0; ; attempt++) {
+    try {
+      result = await model.generateContent(parts);
+      break;
+    } catch (e: unknown) {
+      const msg = e instanceof Error ? e.message : String(e);
+      const is429 = msg.includes("429") || msg.toLowerCase().includes("quota");
+      if (!is429 || attempt >= 4) throw e;
+      // Exponential backoff: 2s, 4s, 8s, 16s
+      await new Promise((r) => setTimeout(r, 2000 * Math.pow(2, attempt)));
+    }
+  }
   const parsed = JSON.parse(result.response.text());
   return {
     name_hi: String(parsed.name_hi ?? "").trim(),

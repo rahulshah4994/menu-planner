@@ -22,11 +22,9 @@ const DEFAULTS: AppSettings = {
 
 export async function getSettings(): Promise<AppSettings> {
   const supabase = await createClient();
-  const { data } = await supabase
-    .from("settings")
-    .select("*")
-    .eq("id", 1)
-    .maybeSingle();
+  // RLS scopes this to the caller's family (one row). Unauthenticated callers
+  // see nothing and fall back to DEFAULTS.
+  const { data } = await supabase.from("settings").select("*").maybeSingle();
   if (!data) return DEFAULTS;
   return data as AppSettings;
 }

@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { CaretLeft, CaretRight } from "@phosphor-icons/react/dist/ssr";
-import { createClient } from "@/lib/supabase/server";
+import { requireFamily } from "@/lib/auth";
 import { getSettings } from "@/lib/settings";
 import {
   addDays,
@@ -41,14 +41,14 @@ export default async function V2PlannerPage({
   const dates = rangeDays(startDate, horizon).map((d) => formatISODate(d));
   const planIds = dates.map((d) => dayPlanId(d));
 
-  const supabase = await createClient();
+  const { supabase, familyId } = await requireFamily();
 
   // Ensure a day_plan row exists for each visible day.
   await supabase
     .from("day_plans")
     .upsert(
-      dates.map((d, i) => ({ id: planIds[i], plan_date: d })),
-      { onConflict: "id" }
+      dates.map((d, i) => ({ id: planIds[i], plan_date: d, family_id: familyId })),
+      { onConflict: "family_id,id" }
     );
 
   // Load slots for the range.
@@ -67,7 +67,23 @@ export default async function V2PlannerPage({
       .from("slot_templates")
       .select("*")
       .order("position");
-    const templates = (tplData ?? []) as SlotTemplate[];
+    let templates = (tplData ?? []) as SlotTemplate[];
+
+    // If the family has no templates yet (e.g. migrated default family),
+    // seed the defaults so the planner is never blank.
+    if (!templates.length) {
+      const defaults = [
+        { name: "Breakfast", color: "#fef3c7", position: 1 },
+        { name: "Lunch",     color: "#e0f2fe", position: 2 },
+        { name: "Dinner",    color: "#e0e7ff", position: 3 },
+      ];
+      const { data: inserted } = await supabase
+        .from("slot_templates")
+        .insert(defaults.map((d) => ({ ...d, family_id: familyId })))
+        .select("*");
+      templates = (inserted ?? []) as SlotTemplate[];
+    }
+
     if (templates.length) {
       const inserts = toSeed.flatMap((pid) =>
         templates.map((t, i) => ({
@@ -77,9 +93,11 @@ export default async function V2PlannerPage({
           name: t.name,
           color: t.color,
           position: i + 1,
+          family_id: familyId,
         }))
       );
-      await supabase.from("day_slots").insert(inserts);
+      const { error: slotInsertError } = await supabase.from("day_slots").insert(inserts);
+      if (slotInsertError) console.error("[planner] slot seed failed:", slotInsertError);
       const refetch = await supabase
         .from("day_slots")
         .select("*")

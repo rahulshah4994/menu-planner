@@ -2,8 +2,9 @@ import { createClient } from "@/lib/supabase/server";
 import { redirect } from "next/navigation";
 
 /**
- * Asserts the request is from an authenticated family member.
- * Self-heals the family_users row if it's missing (e.g., first sign-in race).
+ * Asserts the request is from an authenticated user who belongs to a family.
+ * Sends users without a family to onboarding (create or join one).
+ * Returns the user, a server supabase client, and the caller's family id.
  */
 export async function requireFamily() {
   const supabase = await createClient();
@@ -14,13 +15,10 @@ export async function requireFamily() {
 
   const { data: fam } = await supabase
     .from("family_users")
-    .select("id")
+    .select("family_id")
     .eq("id", user.id)
     .maybeSingle();
-  if (!fam) {
-    await supabase
-      .from("family_users")
-      .insert({ id: user.id, email: user.email! });
-  }
-  return { user, supabase };
+  if (!fam?.family_id) redirect("/onboarding");
+
+  return { user, supabase, familyId: fam.family_id as string };
 }

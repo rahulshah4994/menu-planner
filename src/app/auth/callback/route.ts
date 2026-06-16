@@ -10,17 +10,8 @@ export async function GET(req: Request) {
     const supabase = await createClient();
     const { error } = await supabase.auth.exchangeCodeForSession(code);
     if (!error) {
-      const {
-        data: { user },
-      } = await supabase.auth.getUser();
-      if (user) {
-        await supabase
-          .from("family_users")
-          .upsert(
-            { id: user.id, email: user.email! },
-            { onConflict: "id" }
-          );
-      }
+      // Family membership is established in /onboarding; requireFamily() in the
+      // (main) layout bounces a family-less user there.
       return NextResponse.redirect(`${url.origin}${next}`);
     }
   }

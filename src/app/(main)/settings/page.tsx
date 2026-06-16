@@ -17,16 +17,22 @@ export default async function V2SettingsPage() {
   const settings = await getSettings();
   const supabase = await createClient();
 
-  const [{ data: tokenRow }, { data: tplData }] = await Promise.all([
-    supabase
-      .from("cook_tokens")
-      .select("token")
-      .eq("revoked", false)
-      .order("created_at", { ascending: false })
-      .limit(1)
-      .maybeSingle(),
-    supabase.from("slot_templates").select("*").order("position"),
-  ]);
+  const [{ data: tokenRow }, { data: tplData }, { data: familyRow }, { data: members }] =
+    await Promise.all([
+      supabase
+        .from("cook_tokens")
+        .select("token")
+        .eq("revoked", false)
+        .order("created_at", { ascending: false })
+        .limit(1)
+        .maybeSingle(),
+      supabase.from("slot_templates").select("*").order("position"),
+      supabase.from("families").select("name, join_code").maybeSingle(),
+      supabase
+        .from("family_users")
+        .select("email")
+        .order("created_at", { ascending: true }),
+    ]);
 
   const hdrs = await headers();
   const proto = hdrs.get("x-forwarded-proto") ?? "http";
@@ -45,6 +51,34 @@ export default async function V2SettingsPage() {
           Defaults for the viewer, day slots, and cook access.
         </p>
       </header>
+
+      <section className="border border-zinc-200 p-5">
+        <h2 className="text-lg font-semibold tracking-tight text-black">
+          {familyRow?.name ?? "Your family"}
+        </h2>
+        <p className="mt-1 text-sm text-zinc-500">
+          Share this join code so others can join your family and share these
+          foods, plans, and settings.
+        </p>
+        <div className="mt-4 flex flex-wrap items-center gap-3">
+          <span className="text-xs font-medium uppercase tracking-wide text-zinc-700">
+            Join code
+          </span>
+          <code className="border border-zinc-300 bg-zinc-50 px-3 py-1.5 text-base font-semibold tracking-widest text-black">
+            {familyRow?.join_code ?? "—"}
+          </code>
+        </div>
+        <div className="mt-4">
+          <span className="text-xs font-medium uppercase tracking-wide text-zinc-700">
+            Members ({members?.length ?? 0})
+          </span>
+          <ul className="mt-2 space-y-1 text-sm text-zinc-700">
+            {(members ?? []).map((m) => (
+              <li key={m.email}>{m.email}</li>
+            ))}
+          </ul>
+        </div>
+      </section>
 
       <CookUrlCard
         url={cookUrl}

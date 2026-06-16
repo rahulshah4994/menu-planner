@@ -1,5 +1,6 @@
 "use server";
 import { createClient } from "@/lib/supabase/server";
+import { requireFamily } from "@/lib/auth";
 import { revalidatePath } from "next/cache";
 import { z } from "zod";
 import { randomBytes } from "crypto";
@@ -27,11 +28,11 @@ export async function updateSettings(fd: FormData) {
     no_repeat_days_dinner: fd.get("no_repeat_days_dinner"),
   });
   const time = `${parsed.deadline_time}:00`;
-  const supabase = await createClient();
+  const { supabase, familyId } = await requireFamily();
   const { error } = await supabase
     .from("settings")
     .update({ ...parsed, deadline_time: time })
-    .eq("id", 1);
+    .eq("family_id", familyId);
   if (error) throw error;
   revalidatePath(SETTINGS);
 }

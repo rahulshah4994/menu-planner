@@ -1,6 +1,5 @@
 import { notFound } from "next/navigation";
 import { createServiceClient } from "@/lib/supabase/server";
-import { getSettings } from "@/lib/settings";
 import { addDays, formatISODate, parseISODate, rangeDays } from "@/lib/dates";
 import { dayPlanId, slotId } from "@/lib/v2/ids";
 import type { DaySlot, SlotTemplate } from "@/lib/v2/types";
@@ -21,19 +20,22 @@ export default async function V2ViewerPage({
   const supabase = createServiceClient();
   const { data: tok } = await supabase
     .from("cook_tokens")
-    .select("token, revoked")
+    .select("token, revoked, family_id")
     .eq("token", token)
     .maybeSingle();
   if (!tok || tok.revoked) notFound();
+  const familyId = tok.family_id as string;
 
-  const settings = await getSettings().catch(async () => {
-    const { data } = await supabase
-      .from("settings")
-      .select("*")
-      .eq("id", 1)
-      .single();
-    return data!;
-  });
+  // Service-role client bypasses RLS, so scope every query to this family.
+  const { data: settingsRow } = await supabase
+    .from("settings")
+    .select("*")
+    .eq("family_id", familyId)
+    .maybeSingle();
+  const settings = settingsRow ?? {
+    viewer_horizon_days: 3,
+    household_size: 2,
+  };
 
   const horizon = settings.viewer_horizon_days ?? 3;
   const today = new Date();
@@ -53,9 +55,14 @@ export default async function V2ViewerPage({
     supabase
       .from("day_slots")
       .select("*")
+      .eq("family_id", familyId)
       .in("day_plan_id", planIds)
       .order("position"),
-    supabase.from("slot_templates").select("*").order("position"),
+    supabase
+      .from("slot_templates")
+      .select("*")
+      .eq("family_id", familyId)
+      .order("position"),
   ]);
 
   const slotsByPlan = new Map<number, DaySlot[]>();
@@ -73,6 +80,7 @@ export default async function V2ViewerPage({
       .select(
         "day_slot_id, position, food:foods(id,name,name_hi,ingredients,ingredients_hi,recipe_url)"
       )
+      .eq("family_id", familyId)
       .in("day_slot_id", allSlotIds)
       .order("position");
     for (const r of (sf ?? []) as unknown as {
